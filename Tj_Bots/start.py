@@ -112,6 +112,9 @@ async def callback_handler(client, query: CallbackQuery):
             "• <code>/tts</code> - הגיבו על הודעת טקסט, והבוט ישלח לכם אותה בהודעה קולית.\n\n"
             "<b>◉ העלאת טקסט (Paste):</b>\n"
             "• <code>/paste</code> - הגיבו על טקסט או קובץ כדי להעלות אותו ל-Pastebin ולקבל קישור."
+            "<b>◉ פרטים על משתמש:</b>\n"
+            "• <code>/id</code> - מזהה משתמש/מזהה צ'אט.\n"
+            "• <code>/info</code> - מידע על חשבון של משתמש, פרופיל, שם, יוזר וכו'..."
         )
         await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('חזרה ⋟', callback_data='help')]]))
 
