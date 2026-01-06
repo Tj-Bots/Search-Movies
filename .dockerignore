@@ -2,8 +2,6 @@ __pycache__
 venv
 myenv
 .git
-.env
 .DS_Store
 *.pyc
 restart.txt
-config.py
