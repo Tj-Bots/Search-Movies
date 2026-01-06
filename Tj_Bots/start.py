@@ -38,11 +38,11 @@ async def start_command(client, message):
         anim_msg = await message.reply_text("👋", quote=True)
         await asyncio.sleep(0.5)
         
-        await anim_msg.edit_text("💻")
-        await asyncio.sleep(0.5)
+        await anim_msg.edit_text("👀")
+        await asyncio.sleep(1.0)
         
         await anim_msg.edit_text("⚡")
-        await asyncio.sleep(1.0)
+        await asyncio.sleep(1.5)
         
         await send_home_message(client, message)
         await anim_msg.delete()
@@ -90,14 +90,13 @@ async def callback_handler(client, query: CallbackQuery):
     
     elif data == "help":
         btns = [
-            [InlineKeyboardButton('◉ תוספות (Extra) ◉', callback_data='help_extra')],
             [InlineKeyboardButton('◉ הגדרות קבוצה ◉', callback_data='help_settings'), InlineKeyboardButton('◉ זכויות יוצרים ◉', callback_data='help_copyright')],
-            [InlineKeyboardButton('◉ סטטיסטיקות ◉', callback_data='help_stats'), InlineKeyboardButton('◉ מדריך שימוש ◉', callback_data='help_guide')],
-            [InlineKeyboardButton('חזרה ⋟', callback_data='home')]
+            [InlineKeyboardButton('◉ תוספות (Extra) ◉', callback_data='help_extra'), InlineKeyboardButton('◉ מדריך שימוש ◉', callback_data='help_guide')],
+            [InlineKeyboardButton('חזרה ⋟', callback_data='home'),             InlineKeyboardButton('◉ סטטיסטיקות ◉', callback_data='help_stats')],
         ]
         
         if user_id in ADMINS:
-             btns.insert(3, [InlineKeyboardButton('👮‍♂️ פקודות מנהל 👮‍♂️', callback_data='help_admin')])
+             btns.insert(0, [InlineKeyboardButton('👮‍♂️ פקודות מנהל 👮‍♂️', callback_data='help_admin')])
 
         await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption="<b>בחר נושא מהתפריט למטה 👇</b>"), reply_markup=InlineKeyboardMarkup(btns))
 
@@ -111,7 +110,7 @@ async def callback_handler(client, query: CallbackQuery):
             "<b>◉ תמלול הודעות (TTS):</b>\n"
             "• <code>/tts</code> - הגיבו על הודעת טקסט, והבוט ישלח לכם אותה בהודעה קולית.\n\n"
             "<b>◉ העלאת טקסט (Paste):</b>\n"
-            "• <code>/paste</code> - הגיבו על טקסט או קובץ כדי להעלות אותו ל-Pastebin ולקבל קישור."
+            "• <code>/paste</code> - הגיבו על טקסט או קובץ כדי להעלות אותו ל-Pastebin ולקבל קישור.\n\n"
             "<b>◉ פרטים על משתמש:</b>\n"
             "• <code>/id</code> - מזהה משתמש/מזהה צ'אט.\n"
             "• <code>/info</code> - מידע על חשבון של משתמש, פרופיל, שם, יוזר וכו'..."
@@ -190,6 +189,3 @@ async def callback_handler(client, query: CallbackQuery):
             pass
     elif data == "noop":
         await query.answer()
-
-
-
