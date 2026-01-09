@@ -17,7 +17,7 @@ async def start_command(client, message):
                 btn = [[InlineKeyboardButton('להרשמה לערוץ', url=f'https://t.me/{UPDATE_CHANNEL}')],
                        [InlineKeyboardButton('נסה שוב', url=f"https://t.me/{client.me.username}?start={file_db_id}")]]
                 return await message.reply_text(
-                    "**כדי להשתמש בבוט הזה עליך להיות מנוי לערוץ העדכונים שלו!**",
+                    "**כדי להשתמש בבוט הזה עליך להיות מנוי לערוץ העדכונים שלו!🫰**",
                     reply_markup=InlineKeyboardMarkup(btn),
                     quote=True
                 )
@@ -92,7 +92,7 @@ async def callback_handler(client, query: CallbackQuery):
         btns = [
             [InlineKeyboardButton('◉ הגדרות קבוצה ◉', callback_data='help_settings'), InlineKeyboardButton('◉ זכויות יוצרים ◉', callback_data='help_copyright')],
             [InlineKeyboardButton('◉ תוספות (Extra) ◉', callback_data='help_extra'), InlineKeyboardButton('◉ מדריך שימוש ◉', callback_data='help_guide')],
-            [InlineKeyboardButton('חזרה ⋟', callback_data='home'),             InlineKeyboardButton('◉ סטטיסטיקות ◉', callback_data='help_stats')],
+            [InlineKeyboardButton('◉ חזרה ◉', callback_data='home'), InlineKeyboardButton('◉ סטטיסטיקות ◉', callback_data='help_stats')],
         ]
         
         if user_id in ADMINS:
