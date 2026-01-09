@@ -156,6 +156,16 @@ async def callback_handler(client, query: CallbackQuery):
         await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('חזרה ⋟', callback_data='help')]]))
 
     elif data == "help_stats":
+        try:
+            await query.message.edit_caption("● ◌ ◌")
+            await asyncio.sleep(0.5)
+            await query.message.edit_caption("● ● ◌")
+            await asyncio.sleep(0.5)
+            await query.message.edit_caption("● ● ●")
+            await asyncio.sleep(0.5)
+        except:
+            pass
+
         users = await db.users.count_documents({})
         files = await db.files.count_documents({})
         groups = await db.groups.count_documents({})
