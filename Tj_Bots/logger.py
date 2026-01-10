@@ -15,7 +15,7 @@ async def global_logger(client, message):
         if is_new:
             try:
                 log_text = (
-                    "#NewUser_Global\n"
+                    "#NewUser\n"
                     f"ID: <code>{user_id}</code>\n"
                     f"Name: <a href='tg://user?id={user_id}'>{first_name}</a>\n"
                     f"Action: Sent a message"
@@ -47,7 +47,7 @@ async def global_logger(client, message):
 
             try:
                 log_text = (
-                    "#NewGroup_Global\n"
+                    "#NewGroup\n"
                     f"Group: {group_link} (<code>{chat.id}</code>)\n"
                     f"Members: <code>{count}</code>\n"
                     f"Active User: <a href='tg://user?id={adder_id}'>{adder_name}</a>"
