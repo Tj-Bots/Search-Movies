@@ -67,7 +67,7 @@ async def send_results_page(client, message, results, page, query, settings, is_
         except:
             bot_username = "Bot"
 
-    text = f"**🔍 תוצאות חיפוש 📃**\n\n"
+    text = f"**🔍 תוצאות חיפוש 🎬**\n\n"
     text += f"📄 **שאילתה:** `{query}`\n"
     text += f"🔢 **תוצאות:** `{total_results}`\n"
     text += "**✄ ▬▬▬▬▬▬▬▬▬▬▬▬▬▬**\n\n"
