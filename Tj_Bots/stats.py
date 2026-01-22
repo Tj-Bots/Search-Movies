@@ -1,4 +1,5 @@
 from pyrogram import Client, filters
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from database import db
 from config import ADMINS, PHOTO_URL
 
@@ -8,15 +9,23 @@ async def stats_command(client, message):
     
     users_count = await db.users.count_documents({})
     files_count = await db.files.count_documents({})
-    groups_count = await db.groups.count_documents({}) # אם הוספת את זה לדאטה בייס
+    groups_count = await db.groups.count_documents({})
     
     text = (
-        "**📊 סטטיסטיקות הבוט 📊**\n\n"
-        f"> 📂 **מספר קבצים:** `{files_count}`\n"
-        f"> 👤 **מספר משתמשים:** `{users_count}`\n"
-        f"> 👥 **מספר קבוצות:** `{groups_count}`"
+        "**📊 <u>סטטיסטיקות הבוט:</u> 📊**\n\n"
+        f" 📂 **מספר קבצים:** `{files_count}`\n"
+        f" 👤 **מספר משתמשים:** `{users_count}`\n"
+        f" 👥 **מספר קבוצות:** `{groups_count}`"
     )
     
+    btn = InlineKeyboardMarkup([
+        [InlineKeyboardButton("✘ סגור", callback_data="closea")]
+    ])
+    
     await msg.delete()
-    await message.reply_photo(PHOTO_URL, caption=text, quote=True)
-
+    await message.reply_photo(
+        PHOTO_URL, 
+        caption=text, 
+        reply_markup=btn,
+        quote=True
+    )
