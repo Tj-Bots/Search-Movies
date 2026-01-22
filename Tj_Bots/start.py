@@ -84,6 +84,19 @@ async def send_home_message(client, message, user=None, is_edit=False):
 async def callback_handler(client, query: CallbackQuery):
     data = query.data
     user_id = query.from_user.id
+
+    if data == "help_admin" and user_id not in ADMINS:
+        return await query.answer("⛔ למנהלים בלבד.", show_alert=True)
+    
+    if data not in ["closea", "noop"]:
+        try:
+            await query.message.edit_media(
+                InputMediaPhoto(PHOTO_URL, caption=""),
+                reply_markup=None 
+            )
+            await asyncio.sleep(0.2)
+        except:
+            pass
     
     if data == "home":
         await send_home_message(client, query.message, user=query.from_user, is_edit=True)
@@ -92,7 +105,7 @@ async def callback_handler(client, query: CallbackQuery):
         btns = [
             [InlineKeyboardButton('◉ הגדרות קבוצה ◉', callback_data='help_settings'), InlineKeyboardButton('◉ זכויות יוצרים ◉', callback_data='help_copyright')],
             [InlineKeyboardButton('◉ תוספות (Extra) ◉', callback_data='help_extra'), InlineKeyboardButton('◉ מדריך שימוש ◉', callback_data='help_guide')],
-            [InlineKeyboardButton('◉ חזרה ◉', callback_data='home'), InlineKeyboardButton('◉ סטטיסטיקות ◉', callback_data='help_stats')],
+            [InlineKeyboardButton('◉ חזרה ◉', callback_data='home'),             InlineKeyboardButton('◉ סטטיסטיקות ◉', callback_data='help_stats')],
         ]
         
         if user_id in ADMINS:
@@ -113,13 +126,13 @@ async def callback_handler(client, query: CallbackQuery):
             "• <code>/paste</code> - הגיבו על טקסט או קובץ כדי להעלות אותו ל-Pastebin ולקבל קישור.\n\n"
             "<b>◉ פרטים על משתמש:</b>\n"
             "• <code>/id</code> - מזהה משתמש/מזהה צ'אט.\n"
-            "• <code>/info</code> - מידע על חשבון של משתמש, פרופיל, שם, יוזר וכו'..."
+            "• <code>/info</code> - מידע על חשבון של משתמש, פרופיל, שם, יוזר וכו'...\n\n"
+            "<b>◉ מזהה סטיקר</b>\n"
+            "• <code>/stickerid</code> - מביא את הid של הסטיקר שהגיבו עליו"
         )
-        await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('חזרה ⋟', callback_data='help')]]))
+        await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('⏎ חזרה', callback_data='help')]]))
 
     elif data == "help_admin":
-        if user_id not in ADMINS:
-            return await query.answer("⛔ למנהלים בלבד.", show_alert=True)
         txt = (
             "<b><u>לוח בקרה למנהלים:</u></b>\n\n"
             "<b>◉ ניהול תוכן:</b>\n"
@@ -132,45 +145,45 @@ async def callback_handler(client, query: CallbackQuery):
             "• <code>/broadcast_groups</code> - שידור לקבוצות.\n"
             "• <code>/restart</code> - הפעלה מחדש."
         )
-        await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('חזרה ⋟', callback_data='help')]]))
+        await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('⏎ חזרה', callback_data='help')]]))
 
     elif data == "help_guide":
-        txt = ("<b>📚 מדריך חיפוש</b>\n\n"
-               "כדי למצוא סרטים וסדרות, כתבו את השם המדויק.\n\n"
-               "✅ <b>דוגמאות טובות:</b>\n"
-               "• אשמתי\n"
-               "• מהיר ועצבני\n\n"
-               "❌ <b>דוגמאות לא טובות:</b>\n"
-               "• יש למישהו הארי פוטר?\n"
-               "• אפשר סרט?\n\n"
-               "👇 <b>נסו עכשיו בקבוצת הבקשות:</b>")
-        btn = [[InlineKeyboardButton('למעבר לקבוצה 💬', url=REQUEST_GROUP)], [InlineKeyboardButton('חזרה ⋟', callback_data='help')]]
+        txt = (
+    "⚙️ <b><u>מדריך לחיפוש ברובוט החיפוש</u></b> ⚙️\n\n"
+    "<i>כדי לבקש סרט או סדרה, יש לשים לב לדרך בה אתם מבקשים.\n"
+    "חשוב לכתוב את השם המדויק של הסרט או הסדרה שברצונכם למצוא.</i>\n\n"
+    "<b><i><u>דוגמאות לחיפוש נכון ✔️</u></i></b>\n"
+    "אשמתי\n"
+    "מהיר ועצבני\n\n"
+    "<b><i><u>דוגמאות לא נכונות ❌</u></i></b>\n"
+    "יש הארי פוטר?\n"
+    "אפשר הארי פוטר\n"
+    "יש את הסרט הארי פוטר?\n\n"
+    "<b>הבנתם? מעולה!\n"
+    "נסו עכשיו בקבוצה!</b>"
+)
+        btn = [[InlineKeyboardButton('• למעבר לקבוצה •', url=REQUEST_GROUP)], [InlineKeyboardButton('⏎ חזרה', callback_data='help')]]
         await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup(btn))
 
     elif data == "help_copyright":
         txt = "<b>© זכויות יוצרים</b>\n\nהקבצים בבוט נאספים מטלגרם באופן אוטומטי. איננו מעלים תוכן בעצמנו."
-        await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('חזרה ⋟', callback_data='help')]]))
+        await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('⏎ חזרה', callback_data='help')]]))
     
     elif data == "help_settings":
         txt = "<b>⚙️ הגדרות קבוצה</b>\n\nשלחו <code>/settings</code> בקבוצה כדי להגדיר:\n• מצב תצוגה (כפתורים/טקסט)\n• טריגר חיפוש (!)\n• כמות תוצאות"
-        await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('חזרה ⋟', callback_data='help')]]))
+        await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('⏎ חזרה', callback_data='help')]]))
 
     elif data == "help_stats":
         try:
-            await query.message.edit_caption("● ◌ ◌")
-            await asyncio.sleep(0.5)
-            await query.message.edit_caption("● ● ◌")
-            await asyncio.sleep(0.5)
-            await query.message.edit_caption("● ● ●")
-            await asyncio.sleep(0.5)
+            await query.message.edit_caption("**__טוען מידע...__**")
         except:
             pass
 
         users = await db.users.count_documents({})
         files = await db.files.count_documents({})
         groups = await db.groups.count_documents({})
-        txt = f"<b>📊 סטטיסטיקות</b>\n\n📂 קבצים: {files}\n👤 משתמשים: {users}\n👥 קבוצות: {groups}"
-        await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('חזרה ⋟', callback_data='help')]]))
+        txt = f"📊 <u>**סטטיסטיקות הבוט:**</u>\n\n📂 **קבצים:** `{files}`\n👤 **משתמשים:** `{users}`\n👥 **קבוצות:** `{groups}`"
+        await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('⏎ חזרה', callback_data='help')]]))
 
     elif data == "about":
         bot_username = client.me.username
@@ -187,7 +200,7 @@ async def callback_handler(client, query: CallbackQuery):
         )
         btn = [
             [InlineKeyboardButton('≈ 𝚜𝚘𝚞𝚛𝚌𝚎 𝚌𝚘𝚍𝚎 ≈', url='https://t.me/+PDuU4Tt5UTRkZDE0')], 
-            [InlineKeyboardButton('חזרה ⋟', callback_data='home'), InlineKeyboardButton('סגור ✘', callback_data='closea')]
+            [InlineKeyboardButton('⏎ חזרה', callback_data='home'), InlineKeyboardButton('✘ סגור', callback_data='closea')]
         ]
         await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup(btn))
 
@@ -199,3 +212,5 @@ async def callback_handler(client, query: CallbackQuery):
             pass
     elif data == "noop":
         await query.answer()
+
+
