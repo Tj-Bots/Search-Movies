@@ -199,7 +199,7 @@ async def callback_handler(client, query: CallbackQuery):
             "<b>╚══════════════════❍⊱❁۪۪</b>"
         )
         btn = [
-            [InlineKeyboardButton('≈ 𝚜𝚘𝚞𝚛𝚌𝚎 𝚌𝚘𝚍𝚎 ≈', url='https://t.me/+PDuU4Tt5UTRkZDE0')], 
+            [InlineKeyboardButton('≈ 𝚜𝚘𝚞𝚛𝚌𝚎 𝚌𝚘𝚍𝚎 ≈', url='https://t.me/TJSourceCode')], 
             [InlineKeyboardButton('⏎ חזרה', callback_data='home'), InlineKeyboardButton('✘ סגור', callback_data='closea')]
         ]
         await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup(btn))
