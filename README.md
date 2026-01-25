@@ -72,7 +72,9 @@
 
 </details>
 
-# 🚀 הרצת הבוט
+#
+🚀 הרצת הבוט
+#
 
 <details>
 <summary><b>🐧 הרצה בשרת לינוקס (VPS / Terminal)</b></summary>
@@ -124,5 +126,4 @@ docker run --env-file .env movie-bot
 </details>
 
 #
-*קרדיטים 😎*
 הבוט נוצר על ידי [@BOSS1480](https://t.me/BOSS1480)
