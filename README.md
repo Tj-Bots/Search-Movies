@@ -106,3 +106,19 @@ nano .env
 ```
 python3 bot.py
 ```
+</details>
+
+<details>
+<summary><b>🐳 הרצה באמצעות Docker</b></summary>
+  
+1. **בניית האימג' (Build):**
+```bash
+docker build . -t movie-bot
+```
+
+2. ה**רצת הקונטיינר (Run):**
+ודא שקובץ ה-.env שלך מעודכן ומלא בפרטים לפני ההרצה.
+```
+docker run --env-file .env movie-bot
+```
+</details>
