@@ -29,7 +29,7 @@ async def global_logger(client, message):
         if is_new_group:
             chat = message.chat
             try:
-                count = await chat.get_members_count()
+                count = await client.get_chat_members_count(chat.id)
             except:
                 count = "Unknown"
 
