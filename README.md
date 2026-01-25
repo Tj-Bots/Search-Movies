@@ -54,6 +54,7 @@
 
 # **🛠 משתנים (Variables)**
 <details>
+<summary><b>משתנים </></b></summary>
 כדי שהבוט יעבוד, חובה להגדיר את המשתנים הבאים בקובץ `.env` או בשרת:
 
 | משתנה | חובה? | מאיפה להשיג? |
