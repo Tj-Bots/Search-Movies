@@ -94,36 +94,37 @@
    ```
 
 3. **התקנת הספריות הדרושות:**
-```
+   ```
 pip3 install -r requirements.txt
-```
+   ```
 
 4. **יצירת קובץ משתנים:**
 שנו את השם של sample_env ל-.env ועכרו אותו עם הפרטים שלכם:
-```
+   ```
 cp sample.env .env
 nano .env
-```
+   ```
 
 5. **הפעלת הבוט:**
-```
+   ```
 python3 bot.py
-```
+   ```
 </details>
 
 <details>
 <summary><b>🐳 הרצה באמצעות Docker</b></summary>
   
 1. **בניית האימג' (Build):**
-```bash
+
+   ```
 docker build . -t movie-bot
-```
+   ```
 
 2. ה**רצת הקונטיינר (Run):**
 ודא שקובץ ה-.env שלך מעודכן ומלא בפרטים לפני ההרצה.
-```
+   ```
 docker run --env-file .env movie-bot
-```
+   ```
 </details>
 
 #
