@@ -73,7 +73,7 @@ class Database:
             regex_list.append(re.compile(escaped_word, re.IGNORECASE))
         
         cursor = self.files.find({"file_name": {"$all": regex_list}})
-        results = await cursor.to_list(length=100)
+        results = await cursor.to_list(length=1000)
         
         def sort_key(item):
             name = item.get('file_name', '')
