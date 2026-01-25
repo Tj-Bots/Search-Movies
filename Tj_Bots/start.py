@@ -138,7 +138,11 @@ async def callback_handler(client, query: CallbackQuery):
             "• <code>/id</code> - מזהה משתמש/מזהה צ'אט.\n"
             "• <code>/info</code> - מידע על חשבון של משתמש, פרופיל, שם, יוזר וכו'...\n\n"
             "<b>◉ מזהה סטיקר</b>\n"
-            "• <code>/stickerid</code> - מביא את הid של הסטיקר שהגיבו עליו"
+            "• <code>/stickerid</code> - מביא את הid של הסטיקר שהגיבו עליו\n\n"
+            "<b>◉ כלי מערכת:</b>\n"
+            "• <code>/json</code> - קבלת המידע הטכני (JSON) של ההודעה.\n"
+            "• <code>/written</code> [שם קובץ] - הופך את הטקסט לקובץ להורדה.\n\n"
+            
         )
         await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('⏎ חזרה', callback_data='help')]]))
 
