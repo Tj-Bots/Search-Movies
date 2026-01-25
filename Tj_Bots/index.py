@@ -108,7 +108,7 @@ async def index_handler(client, message):
             try:
                 processed = min(current_id, end_id)
                 await status.edit(
-                    f"⏳ **מעבד נתונים...**\n"
+                    f"⏳ **שומר קבצים...**\n"
                     f"📍 מעבד הודעה: `{processed}` / `{end_id}`\n\n"
                     f"✅ נשמרו: `{total_saved}`\n"
                     f"♻️ כפולים: `{total_dups}`",
