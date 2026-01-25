@@ -81,32 +81,32 @@
 
 <br>
 
-1. **עדכון והתקנת גיט ופייתון:**
+**עדכון והתקנת גיט ופייתון:**
    ```bash
    sudo apt update && sudo apt upgrade -y
    sudo apt install git python3-pip -y
    ```
 
-2. **שכפול התיקייה (Clone):**
+**שכפול התיקייה (Clone):**
    ```bash
    git clone https://github.com/Tj-Bots/Search-Movies
    cd REPO_NAME
    ```
 
-3. **התקנת הספריות הדרושות:**
+**התקנת הספריות הדרושות:**
 
 ```
 pip3 install -r requirements.txt
 ```
 
-5. **יצירת קובץ משתנים:**
+**יצירת קובץ משתנים:**
 שנו את השם של sample_env ל-.env ועכרו אותו עם הפרטים שלכם:
 ```
 cp sample.env .env
 nano .env
 ```
 
-5. **הפעלת הבוט:**
+**הפעלת הבוט:**
 ```
 python3 bot.py
 ```
