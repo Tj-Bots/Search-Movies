@@ -3,7 +3,7 @@
 בוט טלגרם לחיפוש סרטים במהירות ובנוחות.
 
 #
-# *פקודות הבוט ⚙️*
+# פקודות הבוט ⚙️
 <details>
 <summary><b>⌨️ פקודות למשתמשים:</b></summary>
 
@@ -53,7 +53,7 @@
 </details>
 
 #
-# **🛠 משתנים (Variables)**
+# 🛠 משתנים (Variables)
 <details>
 <summary><b>משתנים </></b></summary>
 כדי שהבוט יעבוד, חובה להגדיר את המשתנים הבאים בקובץ `.env` או בשרת:
@@ -81,7 +81,7 @@
 
 <br>
 
-**עדכון והתקנת גיט ופייתון:**
+# עדכון והתקנת גיט ופייתון:
    ```bash
    sudo apt update && sudo apt upgrade -y
    sudo apt install git python3-pip -y
