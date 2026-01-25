@@ -142,7 +142,6 @@ async def callback_handler(client, query: CallbackQuery):
             "<b>◉ כלי מערכת:</b>\n"
             "• <code>/json</code> - קבלת המידע הטכני (JSON) של ההודעה.\n"
             "• <code>/written</code> [שם קובץ] - הופך את הטקסט לקובץ להורדה."
-            
         )
         await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('⏎ חזרה', callback_data='help')]]))
 
@@ -226,16 +225,6 @@ InlineKeyboardButton('↻ רענן', callback_data='help_stats')]])
             [InlineKeyboardButton('⏎ חזרה', callback_data='home'), InlineKeyboardButton('✘ סגור', callback_data='closea')]
         ]
         await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup(btn))
-
-    elif data == "closea":
-        try:
-            await query.message.delete()
-            await query.message.reply_to_message.delete()
-        except:
-            pass
-    elif data == "noop":
-        await query.answer()PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup(btn))
-
     elif data == "closea":
         try:
             await query.message.delete()
@@ -244,5 +233,3 @@ InlineKeyboardButton('↻ רענן', callback_data='help_stats')]])
             pass
     elif data == "noop":
         await query.answer()
-
-
