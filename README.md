@@ -90,7 +90,7 @@
 **שכפול התיקייה (Clone):**
    ```bash
    git clone https://github.com/Tj-Bots/Search-Movies
-   cd REPO_NAME
+   cd Search-Movies
    ```
 
 **התקנת הספריות הדרושות:**
