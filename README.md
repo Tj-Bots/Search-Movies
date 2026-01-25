@@ -122,3 +122,6 @@ docker build . -t movie-bot
 docker run --env-file .env movie-bot
 ```
 </details>
+
+# ***קרדיטים 😎***
+הבוט נוצר על ידי [@BOSS1480](https://t.me/BOSS1480)
