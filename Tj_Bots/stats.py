@@ -14,7 +14,7 @@ async def stats_command(client, message):
                 return f"{bytes:.2f}{unit}{suffix}"
             bytes /= factor
 
-    MAX_DB_SIZE = 536870912 
+    MAX_DB_SIZE = 536870912
 
     users_count = await db.users.count_documents({})
     files_count = await db.files.count_documents({})
@@ -33,19 +33,20 @@ async def stats_command(client, message):
         bar = '▓' * filled_len + '░' * (bar_len - filled_len)
         
         db_info = (
-            f"🗄 **ניצול אחסון (MongoDB):**\n"
-            f"**• בשימוש:** `{used_size}`\n"
-            f"**• מתוך:** `{max_size}`\n"
-            f"**• סטטוס:** [{bar}] `{percentage:.2f}%`"
+            f"🗄 <u>**אחסון דאטה בייס:**</u>\n"
+            f"**★ בשימוש:** `{used_size}`\n"
+            f"**★ מתוך:** `{max_size}`\n"
+            f"★ **סטטוס:** [{bar}] `{percentage:.2f}%`"
         )
     except Exception as e:
         db_info = f"❌ לא ניתן לשלוף נתונים טכניים.\n`{e}`"
 
     text = (
         f"📊 <u>**סטטיסטיקות הבוט:**</u>\n\n"
-        f"📂 **קבצים:** `{files_count}`\n"
-        f"👤 **משתמשים:** `{users_count}`\n"
-        f"👥 **קבוצות:** `{groups_count}`\n\n"
+        f"★ <u>**סטטוס בוט:**</u>\n"
+        f"★ **קבצים:** `{files_count}`\n"
+        f"★ **משתמשים:** `{users_count}`\n"
+        f"★ **קבוצות:** `{groups_count}`\n\n"
         f"{db_info}"
     )
     
@@ -60,3 +61,4 @@ async def stats_command(client, message):
         reply_markup=btn,
         quote=True
     )
+    
