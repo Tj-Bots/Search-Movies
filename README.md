@@ -64,7 +64,7 @@
 | `BOT_TOKEN` | ✅ | מבוט האב: [@BotFather](https://t.me/BotFather) |
 | `MONGO_URI` | ✅ | מהאתר של [MongoDB](https://www.mongodb.com) |
 | `DB_NAME` | ✅ | בחרו שם רנדומלי באנגלית (למשל: `MovieBot`) |
-| `ADMINS` | ✅ | שלחו `/id` לבוט [@GetChatID_IL_BOT](https://t.me/GetChatID_IL_BOT) |
+| `ADMINS` | ✅ | שלחו `/me` לבוט [@GetChatID_IL_BOT](https://t.me/GetChatID_IL_BOT) |
 | `LOG_CHANNEL` | ✅ | הוסיפו את הבוט לערוץ ושלחו שם הודעה, העבירו אותה ל- [@GetChatID_IL_BOT](https://t.me/GetChatID_IL_BOT) |
 | `UPDATE_CHANNEL` | ❌ | שם המשתמש של הערוץ (בלי @) |
 | `REQUEST_GROUP` | ❌ | קישור לקבוצת הבקשות/תמיכה |
