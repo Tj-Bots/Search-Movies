@@ -81,7 +81,7 @@
 
 <br>
 
-# עדכון והתקנת גיט ופייתון:
+**עדכון והתקנת גיט ופייתון:**
    ```bash
    sudo apt update && sudo apt upgrade -y
    sudo apt install git python3-pip -y
