@@ -14,8 +14,8 @@ async def start_command(client, message):
             try:
                 await client.get_chat_member(UPDATE_CHANNEL, user_id)
             except:
-                btn = [[InlineKeyboardButton('להרשמה לערוץ', url=f'https://t.me/{UPDATE_CHANNEL}')],
-                       [InlineKeyboardButton('נסה שוב', url=f"https://t.me/{client.me.username}?start={file_db_id}")]]
+                btn = [[InlineKeyboardButton('📣 להרשמה לערוץ', url=f'https://t.me/{UPDATE_CHANNEL}')],
+                       [InlineKeyboardButton('↻ נסה שוב', url=f"https://t.me/{client.me.username}?start={file_db_id}")]]
                 return await message.reply_text(
                     "**כדי להשתמש בבוט הזה עליך להיות מנוי לערוץ העדכונים שלו!🫰**",
                     reply_markup=InlineKeyboardMarkup(btn),
@@ -59,21 +59,26 @@ async def added_to_group(client, message):
 async def send_home_message(client, message, user=None, is_edit=False):
     if not user:
         user = message.from_user
+    
     user_mention = user.mention
     bot_name = client.me.first_name
+    bot_username = client.me.username
+    
+    bot_mention = f"[{bot_name}](https://t.me/{bot_username})"
     
     buttons = [
-        [InlineKeyboardButton('◉ קבוצת בקשות ◉', url=REQUEST_GROUP), 
-         InlineKeyboardButton('◉ ערוץ עדכונים ◉', url=f'https://t.me/{UPDATE_CHANNEL}')],
-        [InlineKeyboardButton('◉ עזרה ◉', callback_data='help'), 
-         InlineKeyboardButton('◉ אודות ◉', callback_data='about')],
+        [InlineKeyboardButton('✇ קבוצת בקשות ✇', url=REQUEST_GROUP), 
+         InlineKeyboardButton('✇ ערוץ עדכונים ✇', url=f'https://t.me/{UPDATE_CHANNEL}')],
+        [InlineKeyboardButton('〄 עזרה 〄', callback_data='help'), 
+         InlineKeyboardButton('⍟ אודות ⍟', callback_data='about')],
         [InlineKeyboardButton('⇋ להוספה לקבוצה ⇋', url=f"http://t.me/{client.me.username}?startgroup&admin=delete_messages")]
     ]
     
-    txt = (f"**היי {user_mention} 👋**\n\n"
-           "**אני בוט עם מאגר עצום של סרטים וסדרות 🎬✨**\n"
-           "**כדי לחפש סרט או סדרה, פשוט שלחו את השם בקבוצה או כאן בפרטי. 😎**\n\n"
-           "**👨🏼‍💻 מתכנת ראשי: @BOSS1480**")
+    txt = (f"**היי {user_mention} 👋**\n"
+            f"**ברוך הבא ל- {bot_mention}** 😎\n\n"
+           "**אני מנוע חיפוש סרטים וסדרות חדשני,**"
+           "\n**התפקיד שלי זה לחפש סרטים בקבוצות,**"
+           "\n**הוסיפו אותי לקבוצה שלכם ואני אמשיך מכאן.**")
     
     if is_edit:
         await message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup(buttons))
@@ -88,7 +93,7 @@ async def callback_handler(client, query: CallbackQuery):
     if data == "help_admin" and user_id not in ADMINS:
         return await query.answer("⛔ למנהלים בלבד.", show_alert=True)
     
-    if data not in ["closea", "noop"]:
+    if data not in ["closea", "noop", "help_stats"]:
         try:
             await query.message.edit_media(
                 InputMediaPhoto(PHOTO_URL, caption=""),
@@ -102,16 +107,21 @@ async def callback_handler(client, query: CallbackQuery):
         await send_home_message(client, query.message, user=query.from_user, is_edit=True)
     
     elif data == "help":
+        user_mention = query.from_user.mention
+        
         btns = [
-            [InlineKeyboardButton('◉ הגדרות קבוצה ◉', callback_data='help_settings'), InlineKeyboardButton('◉ זכויות יוצרים ◉', callback_data='help_copyright')],
-            [InlineKeyboardButton('◉ תוספות (Extra) ◉', callback_data='help_extra'), InlineKeyboardButton('◉ מדריך שימוש ◉', callback_data='help_guide')],
-            [InlineKeyboardButton('◉ חזרה ◉', callback_data='home'),             InlineKeyboardButton('◉ סטטיסטיקות ◉', callback_data='help_stats')],
+            [InlineKeyboardButton('הגדרות קבוצה', callback_data='help_settings'), InlineKeyboardButton('זכויות יוצרים', callback_data='help_copyright')],
+            [InlineKeyboardButton('תוספות (Extra)', callback_data='help_extra'), InlineKeyboardButton('מדריך שימוש', callback_data='help_guide')],
+            [InlineKeyboardButton('⏎ חזרה', callback_data='home'),             InlineKeyboardButton('סטטיסטיקות', callback_data='help_stats')],
         ]
         
         if user_id in ADMINS:
              btns.insert(0, [InlineKeyboardButton('👮‍♂️ פקודות מנהל 👮‍♂️', callback_data='help_admin')])
 
-        await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption="<b>בחר נושא מהתפריט למטה 👇</b>"), reply_markup=InlineKeyboardMarkup(btns))
+        await query.message.edit_media(
+            InputMediaPhoto(PHOTO_URL, caption=f"<b>היי {user_mention},\nכאן תוכל לקבל עזרה עבור כל הפקודות שלי.</b>"), 
+            reply_markup=InlineKeyboardMarkup(btns)
+        )
 
     elif data == "help_extra":
         txt = (
@@ -139,6 +149,12 @@ async def callback_handler(client, query: CallbackQuery):
             "• <code>/index</code> [link] - [start] - הוספת קבצים מערוץ (לפי טווח).\n"
             "• <code>/newindex</code> [ID] - מעקב אחרי תוכן חדש בערוץ.\n"
             "• <code>/channels</code> - ניהול ערוצים במעקב.\n\n"
+            "<b>◉ משתמשים וקבוצות:</b>\n"
+            "• <code>/ban</code> [ID] - חסימת משתמש.\n"
+            "• <code>/unban</code> [ID] - שחרור משתמש.\n"
+            "• <code>/ban_chat</code> [ID] - חסימת קבוצה.\n"
+            "• <code>/unban_chat</code> [ID] - שחרור קבוצה.\n"
+            "• <code>/leave</code> [ID] - יציאה מקבוצה (ללא חסימה).\n\n"
             "<b>◉ מערכת:</b>\n"
             "• <code>/clean</code> - אשף ניקוי נתונים.\n"
             "• <code>/broadcast</code> [-f] - שידור למנויים.\n"
@@ -183,7 +199,10 @@ async def callback_handler(client, query: CallbackQuery):
         files = await db.files.count_documents({})
         groups = await db.groups.count_documents({})
         txt = f"📊 <u>**סטטיסטיקות הבוט:**</u>\n\n📂 **קבצים:** `{files}`\n👤 **משתמשים:** `{users}`\n👥 **קבוצות:** `{groups}`"
-        await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('⏎ חזרה', callback_data='help')]]))
+        await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup([
+[InlineKeyboardButton('⏎ חזרה', callback_data='help'),
+InlineKeyboardButton('↻ רענן', callback_data='help_stats')]])
+)
 
     elif data == "about":
         bot_username = client.me.username
@@ -203,6 +222,15 @@ async def callback_handler(client, query: CallbackQuery):
             [InlineKeyboardButton('⏎ חזרה', callback_data='home'), InlineKeyboardButton('✘ סגור', callback_data='closea')]
         ]
         await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup(btn))
+
+    elif data == "closea":
+        try:
+            await query.message.delete()
+            await query.message.reply_to_message.delete()
+        except:
+            pass
+    elif data == "noop":
+        await query.answer()PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup(btn))
 
     elif data == "closea":
         try:
