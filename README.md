@@ -89,8 +89,9 @@
 
 2. **שכפול התיקייה (Clone):**
    ```bash
-   git clone [https://github.com/Tj-Bots/Search-Movies](https://github.com/Tj-Bots/Search-Movies)
-cd REPO_NAME```
+   git clone https://github.com/Tj-Bots/Search-Movies
+   cd REPO_NAME
+   ```
 
 3. **התקנת הספריות הדרושות:**
 ```
