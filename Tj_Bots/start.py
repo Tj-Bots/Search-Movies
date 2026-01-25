@@ -141,7 +141,7 @@ async def callback_handler(client, query: CallbackQuery):
             "• <code>/stickerid</code> - מביא את הid של הסטיקר שהגיבו עליו\n\n"
             "<b>◉ כלי מערכת:</b>\n"
             "• <code>/json</code> - קבלת המידע הטכני (JSON) של ההודעה.\n"
-            "• <code>/written</code> [שם קובץ] - הופך את הטקסט לקובץ להורדה.\n\n"
+            "• <code>/written</code> [שם קובץ] - הופך את הטקסט לקובץ להורדה."
             
         )
         await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('⏎ חזרה', callback_data='help')]]))
