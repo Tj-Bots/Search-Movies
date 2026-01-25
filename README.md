@@ -2,6 +2,7 @@
 
 בוט לחיפוש סרטים בטלגרם.
 
+#
 # **פקודות הבוט ⚙️**
 <details>
 <summary><b>⌨️ פקודות למשתמשים:</b></summary>
@@ -51,7 +52,7 @@
 -  `/leave` [ID] - יציאה מקבוצה (ללא חסימה).
 </details>
 
-
+#
 # **🛠 משתנים (Variables)**
 <details>
 <summary><b>משתנים </></b></summary>
@@ -73,8 +74,7 @@
 </details>
 
 #
-🚀 הרצת הבוט
-#
+# 🚀 הרצת הבוט
 
 <details>
 <summary><b>🐧 הרצה בשרת לינוקס (VPS / Terminal)</b></summary>
