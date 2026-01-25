@@ -194,18 +194,60 @@ async def callback_handler(client, query: CallbackQuery):
 
     elif data == "help_stats":
         try:
-            await query.message.edit_caption("**__טוען מידע...__**")
+            await query.message.edit_caption("⏳ **מנתח נתונים...**")
         except:
             pass
+
+        def get_size(bytes, suffix="B"):
+            factor = 1024
+            for unit in ["", "K", "M", "G", "T", "P"]:
+                if bytes < factor:
+                    return f"{bytes:.2f}{unit}{suffix}"
+                bytes /= factor
+
+        MAX_DB_SIZE = 536870912
 
         users = await db.users.count_documents({})
         files = await db.files.count_documents({})
         groups = await db.groups.count_documents({})
-        txt = f"📊 <u>**סטטיסטיקות הבוט:**</u>\n\n📂 **קבצים:** `{files}`\n👤 **משתמשים:** `{users}`\n👥 **קבוצות:** `{groups}`"
-        await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup([
-[InlineKeyboardButton('⏎ חזרה', callback_data='help'),
-InlineKeyboardButton('↻ רענן', callback_data='help_stats')]])
-)
+
+        try:
+            db_stats = await db.users.database.command("dbstats")
+            used_bytes = db_stats['storageSize']
+            used_size = get_size(used_bytes)
+            max_size = get_size(MAX_DB_SIZE)
+            
+            percentage = (used_bytes / MAX_DB_SIZE) * 100
+            
+            bar_len = 10
+            filled_len = int(bar_len * percentage / 100)
+            bar = '▓' * filled_len + '░' * (bar_len - filled_len)
+            
+            db_info = (
+                f"🗄 **ניצול אחסון (MongoDB):**\n"
+                f"**• בשימוש:** `{used_size}`\n"
+                f"**• מתוך:** `{max_size}`\n"
+                f"**• סטטוס:** [{bar}] `{percentage:.2f}%`"
+            )
+        except Exception as e:
+            db_info = f"❌ לא ניתן לשלוף נתונים טכניים.\n`{e}`"
+
+        txt = (
+            f"📊 <u>**סטטיסטיקות הבוט:**</u>\n\n"
+            f"📂 **קבצים:** `{files}`\n"
+            f"👤 **משתמשים:** `{users}`\n"
+            f"👥 **קבוצות:** `{groups}`\n\n"
+            f"{db_info}"
+        )
+        
+        await query.message.edit_media(
+            InputMediaPhoto(PHOTO_URL, caption=txt), 
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton('⏎ חזרה', callback_data='help'),
+                 InlineKeyboardButton('↻ רענן', callback_data='help_stats')]
+            ])
+        )
+
 
     elif data == "about":
         bot_username = client.me.username
