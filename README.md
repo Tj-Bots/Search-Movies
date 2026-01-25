@@ -2,7 +2,7 @@
 
 בוט לחיפוש סרטים בטלגרם.
 
-# **מה יש בבוט?**
+# **פקודות הבוט?**
 
 <details>
 <summary><b>⌨️ פקודות למשתמשים:</b></summary>
@@ -51,3 +51,58 @@
 - `/unban_chat` [ID] - שחרור קבוצה.
 -  `/leave` [ID] - יציאה מקבוצה (ללא חסימה).
 </details>
+
+
+# **🛠 משתנים (Variables)**
+
+כדי שהבוט יעבוד, חובה להגדיר את המשתנים הבאים בקובץ `.env` או בשרת:
+
+| משתנה | חובה? | מאיפה להשיג? |
+| :--- | :---: | :--- |
+| `API_ID` | ✅ | [my.telegram.org](https://my.telegram.org) |
+| `API_HASH` | ✅ | [my.telegram.org](https://my.telegram.org) |
+| `BOT_TOKEN` | ✅ | מבוט האב: [@BotFather](https://t.me/BotFather) |
+| `MONGO_URI` | ✅ | מהאתר של [MongoDB](https://www.mongodb.com) |
+| `DB_NAME` | ✅ | בחרו שם רנדומלי באנגלית (למשל: `MovieBot`) |
+| `ADMINS` | ✅ | שלחו `/id` לבוט [@GetChatID_IL_BOT](https://t.me/GetChatID_IL_BOT) |
+| `LOG_CHANNEL` | ✅ | הוסיפו את הבוט לערוץ ושלחו שם הודעה, העבירו אותה ל- [@GetChatID_IL_BOT](https://t.me/GetChatID_IL_BOT) |
+| `UPDATE_CHANNEL` | ❌ | שם המשתמש של הערוץ (בלי @) |
+| `REQUEST_GROUP` | ❌ | קישור לקבוצת הבקשות/תמיכה |
+| `PHOTO_URL` | ❌ | קישור ישיר לתמונה (שישמש כקאבר לבוט) |
+
+
+
+# 🚀 הרצת הבוט
+
+<details>
+<summary><b>🐧 הרצה בשרת לינוקס (VPS / Terminal)</b></summary>
+
+<br>
+
+1. **עדכון והתקנת גיט ופייתון:**
+   ```bash
+   sudo apt update && sudo apt upgrade -y
+   sudo apt install git python3-pip -y
+   ```
+
+2. **שכפול התיקייה (Clone):**
+   ```bash
+   git clone [https://github.com/Tj-Bots/Search-Movies](https://github.com/Tj-Bots/Search-Movies)
+cd REPO_NAME```
+
+3. **התקנת הספריות הדרושות:**
+```
+pip3 install -r requirements.txt
+```
+
+4. **יצירת קובץ משתנים:**
+שנו את השם של sample_env ל-.env ועכרו אותו עם הפרטים שלכם:
+```
+cp sample.env .env
+nano .env
+```
+
+5. **הפעלת הבוט:**
+```
+python3 bot.py
+```
