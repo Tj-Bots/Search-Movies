@@ -112,7 +112,8 @@ async def callback_handler(client, query: CallbackQuery):
         btns = [
             [InlineKeyboardButton('הגדרות קבוצה', callback_data='help_settings'), InlineKeyboardButton('זכויות יוצרים', callback_data='help_copyright')],
             [InlineKeyboardButton('תוספות (Extra)', callback_data='help_extra'), InlineKeyboardButton('מדריך שימוש', callback_data='help_guide')],
-            [InlineKeyboardButton('⏎ חזרה', callback_data='home'),             InlineKeyboardButton('סטטיסטיקות', callback_data='help_stats')],
+            [InlineKeyboardButton('הורדה מטיקטוק', callback_data='help_d'),           InlineKeyboardButton('סטטיסטיקות', callback_data='help_stats')],
+            [InlineKeyboardButton('⏎ חזרה', callback_data='home')],          
         ]
         
         if user_id in ADMINS:
@@ -181,7 +182,7 @@ async def callback_handler(client, query: CallbackQuery):
     "<b>הבנתם? מעולה!\n"
     "נסו עכשיו בקבוצה!</b>"
 )
-        btn = [[InlineKeyboardButton('• למעבר לקבוצה •', url=REQUEST_GROUP)], [InlineKeyboardButton('⏎ חזרה', callback_data='help')]]
+        btn = [[InlineKeyboardButton('למעבר לקבוצה 💬', url=REQUEST_GROUP)], [InlineKeyboardButton('⏎ חזרה', callback_data='help')]]
         await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup(btn))
 
     elif data == "help_copyright":
@@ -194,7 +195,7 @@ async def callback_handler(client, query: CallbackQuery):
 
     elif data == "help_stats":
         try:
-            await query.message.edit_caption("⏳ **מנתח נתונים...**")
+            await query.message.edit_caption("⏳ **מחשב נתונים...**")
         except:
             pass
 
@@ -267,7 +268,22 @@ async def callback_handler(client, query: CallbackQuery):
             [InlineKeyboardButton('≈ 𝚜𝚘𝚞𝚛𝚌𝚎 𝚌𝚘𝚍𝚎 ≈', url='https://t.me/TJSourceCode')], 
             [InlineKeyboardButton('⏎ חזרה', callback_data='home'), InlineKeyboardButton('✘ סגור', callback_data='closea')]
         ]
-        await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup(btn))
+
+
+    elif data == "help_d":
+        txt = (
+            "<b><u>📥 הורדה מטיקטוק:</u></b>\n\n"
+            "אני יכול להוריד עבורכם סרטונים ותמונות מטיקטוק באיכות גבוהה!\n\n"
+            "<b>📌 איך משתמשים?</b>\n"
+            "1. <b>פקודה רגילה:</b>\n"
+            "שלחו את הפקודה <code>/d</code> ואחריה רווח והקישור.\n"
+            "דוגמה: <code>/d https://www.tiktok.com/...</code>\n\n"
+            "2. <b>דרך תגובה (Reply):</b>\n"
+            "הגיבו על הודעה עם קישור בפקודה <code>/d</code> והבוט יוריד את התוכן.\n\n"
+        )
+        await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('⏎ חזרה', callback_data='help')]]))
+
+
     elif data == "closea":
         try:
             await query.message.delete()
