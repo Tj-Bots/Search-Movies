@@ -182,7 +182,7 @@ async def callback_handler(client, query: CallbackQuery):
     "<b>הבנתם? מעולה!\n"
     "נסו עכשיו בקבוצה!</b>"
 )
-        btn = [[InlineKeyboardButton('למעבר לקבוצה 💬', url=REQUEST_GROUP)], [InlineKeyboardButton('⏎ חזרה', callback_data='help')]]
+        btn = [[InlineKeyboardButton('• למעבר לקבוצה •', url=REQUEST_GROUP)], [InlineKeyboardButton('⏎ חזרה', callback_data='help')]]
         await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup(btn))
 
     elif data == "help_copyright":
@@ -250,7 +250,6 @@ async def callback_handler(client, query: CallbackQuery):
             ])
         )
 
-
     elif data == "about":
         bot_username = client.me.username
         txt = (
@@ -268,21 +267,20 @@ async def callback_handler(client, query: CallbackQuery):
             [InlineKeyboardButton('≈ 𝚜𝚘𝚞𝚛𝚌𝚎 𝚌𝚘𝚍𝚎 ≈', url='https://t.me/TJSourceCode')], 
             [InlineKeyboardButton('⏎ חזרה', callback_data='home'), InlineKeyboardButton('✘ סגור', callback_data='closea')]
         ]
-
+        # תיקון: הוספת השורה החסרה לעריכת ההודעה
+        await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup(btn))
 
     elif data == "help_d":
         txt = (
             "<b><u>📥 הורדה מטיקטוק:</u></b>\n\n"
-            "אני יכול להוריד עבורכם סרטונים ותמונות מטיקטוק באיכות גבוהה!\n\n"
-            "<b>📌 איך משתמשים?</b>\n"
-            "1. <b>פקודה רגילה:</b>\n"
-            "שלחו את הפקודה <code>/d</code> ואחריה רווח והקישור.\n"
-            "דוגמה: <code>/d https://www.tiktok.com/...</code>\n\n"
-            "2. <b>דרך תגובה (Reply):</b>\n"
-            "הגיבו על הודעה עם קישור בפקודה <code>/d</code> והבוט יוריד את התוכן.\n\n"
+            "<b>◉ הורדה רגילה:</b>\n"
+            "• <code>/d</code> [קישור] - שולחים את הפקודה ואחריה את הקישור.\n\n"
+            "<b>◉ הורדה בתגובה:</b>\n"
+            "• <code>/d</code> - מגיבים עם הפקודה על הודעה שמכילה קישור.\n\n"
+            "<b>ℹ️ הערה:</b>\n"
+            "• הבוט תומך כרגע בהורדת <b>סרטונים בלבד</b> מטיקטוק (וידאו).\n"
         )
         await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('⏎ חזרה', callback_data='help')]]))
-
 
     elif data == "closea":
         try:
