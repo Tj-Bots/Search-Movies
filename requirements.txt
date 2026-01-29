@@ -5,3 +5,4 @@ python-dotenv
 dnspython
 requests
 gTTS
+yt-dlp
