@@ -3,6 +3,7 @@ import asyncio
 import os
 from pyrogram import Client, idle
 from config import API_ID, API_HASH, BOT_TOKEN, LOG_CHANNEL
+from database import db
 
 logging.basicConfig(
     level=logging.ERROR,
@@ -20,8 +21,8 @@ app = Client(
 async def start_bot():
     print("🤖 הבוט מתחיל לעבוד...")
     await app.start()
+    await db.init_database(app)
     
-    # בדיקת חזרה מריסטארט
     if os.path.exists("restart.txt"):
         try:
             with open("restart.txt", "r") as f:
@@ -47,6 +48,3 @@ async def start_bot():
 
 if __name__ == "__main__":
     app.run(start_bot())
-
-
-
