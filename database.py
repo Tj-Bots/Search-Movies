@@ -5,7 +5,7 @@ from config import MONGO_URI, DB_NAME
 class Database:
     def __init__(self):
         self._client = motor.motor_asyncio.AsyncIOMotorClient(MONGO_URI)
-        self.db = None
+        self.db = self._client[DB_NAME]
         self.files = None
         self.users = None
         self.groups = None
@@ -13,18 +13,17 @@ class Database:
         self.watched = None
         self.banned = None
         self.banned_chats = None
-        self.set_db_name(DB_NAME)
 
-    def set_db_name(self, name):
-        self.db = self._client[name]
-        self.files = self.db.files
-        self.users = self.db.users
-        self.groups = self.db.groups
-        self.settings = self.db.settings
-        self.watched = self.db.watched
-        self.banned = self.db.banned
-        self.banned_chats = self.db.banned_chats
-        print(f"✅ Database switched to: {name}")
+    async def init_database(self, bot):
+        me = await bot.get_me()
+        prefix = me.username
+        self.files = self.db[f"{prefix}_files"]
+        self.users = self.db[f"{prefix}_users"]
+        self.groups = self.db[f"{prefix}_groups"]
+        self.settings = self.db[f"{prefix}_settings"]
+        self.watched = self.db[f"{prefix}_watched"]
+        self.banned = self.db[f"{prefix}_banned"]
+        self.banned_chats = self.db[f"{prefix}_banned_chats"]
 
     async def add_user(self, user_id, first_name):
         if self.users is None: return False
