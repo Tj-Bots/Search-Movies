@@ -40,7 +40,7 @@ async def start_command(client, message):
         bot_mention = f"[{bot_name}](https://t.me/{bot_username})"
 
         anim_msg = await message.reply_text(
-             f"**__היי 👋__**\n**__ברוכים הבאים ל- {bot_mention} 😎__**", 
+             f"<blockquote>**__היי 👋__**\n**__ברוכים הבאים ל- {bot_mention} 😎__**</blockquote>", 
              quote=True
         )        
         await asyncio.sleep(1.0)
@@ -84,8 +84,9 @@ async def send_home_message(client, message, user=None, is_edit=False):
     txt = (f"**היי {user_mention} 👋**\n"
             f"**ברוכים הבאים ל- {bot_mention}** 😎\n\n"
            "**אני מנוע חיפוש סרטים וסדרות חדשני,**"
-           "\n**התפקיד שלי זה לחפש סרטים בקבוצות,**"
-           "\n**הוסיפו אותי לקבוצה שלכם ואני אמשיך מכאן.**")
+           "\n<b>התפקיד שלי זה לחפש סרטים בקבוצות,"
+           "\nהוסיפו אותי לקבוצה שלכם ואני אמשיך מכאן.</b>\n\n"
+           "<blockquote>**👨🏼‍💻מתכנת ראשי: @BOSS1480**</blockquote>")
     
     if is_edit:
         await message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup(buttons))
@@ -135,21 +136,21 @@ async def callback_handler(client, query: CallbackQuery):
         txt = (
             "<b><u>פקודות נוספות (Extra Tools):</u></b>\n\n"
             "<b>◉ פונט טקסט:</b>\n"
-            "• <code>/font</code> [טקסט] - הופך טקסט באנגלית לפונטים מיוחדים.\n\n"
+            "<blockquote>• <code>/font</code> [טקסט] - הופך טקסט באנגלית לפונטים מיוחדים.</blockquote>\n\n"
             "<b>◉ שיתוף טקסט:</b>\n"
-            "• <code>/share</code> [טקסט] - יוצר קישור שיתוף מהיר לטקסט שכתבתם.\n\n"
+            "<blockquote>• <code>/share</code> [טקסט] - יוצר קישור שיתוף מהיר לטקסט שכתבתם.</blockquote>\n\n"
             "<b>◉ תמלול הודעות (TTS):</b>\n"
-            "• <code>/tts</code> - הגיבו על הודעת טקסט, והבוט ישלח לכם אותה בהודעה קולית.\n\n"
+            "<blockquote>• <code>/tts</code> - הגיבו על הודעת טקסט, והבוט ישלח לכם אותה בהודעה קולית.</blockquote>\n\n"
             "<b>◉ העלאת טקסט (Paste):</b>\n"
-            "• <code>/paste</code> - הגיבו על טקסט או קובץ כדי להעלות אותו ל-Pastebin ולקבל קישור.\n\n"
+            "<blockquote>• <code>/paste</code> - הגיבו על טקסט או קובץ כדי להעלות אותו ל-Pastebin ולקבל קישור.</blockquote>\n\n"
             "<b>◉ פרטים על משתמש:</b>\n"
-            "• <code>/id</code> - מזהה משתמש/מזהה צ'אט.\n"
-            "• <code>/info</code> - מידע על חשבון של משתמש, פרופיל, שם, יוזר וכו'...\n\n"
+            "<blockquote>• <code>/id</code> - מזהה משתמש/מזהה צ'אט.</blockquote>\n"
+            "<blockquote>• <code>/info</code> - מידע על חשבון של משתמש, פרופיל, שם, יוזר וכו'...</blockquote>\n\n"
             "<b>◉ מזהה סטיקר</b>\n"
-            "• <code>/stickerid</code> - מביא את הid של הסטיקר שהגיבו עליו\n\n"
+            "<blockquote>• <code>/stickerid</code> - מביא את הid של הסטיקר שהגיבו עליו.</blockquote>\n\n"
             "<b>◉ כלי מערכת:</b>\n"
-            "• <code>/json</code> - קבלת המידע הטכני (JSON) של ההודעה.\n"
-            "• <code>/written</code> [שם קובץ] - הופך את הטקסט לקובץ להורדה."
+            "<blockquote>• <code>/json</code> - קבלת המידע הטכני (JSON) של ההודעה.</blockquote>\n"
+            "<blockquote>• <code>/written</code> [שם קובץ] - הופך את הטקסט לקובץ טקסט.</blockquote>"
         )
         await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('חזרה ⋟', callback_data='help')]]))
 
@@ -157,39 +158,45 @@ async def callback_handler(client, query: CallbackQuery):
         txt = (
             "<b><u>לוח בקרה למנהלים:</u></b>\n\n"
             "<b>◉ ניהול תוכן:</b>\n"
-            "• <code>/index</code> [link] - [start] - הוספת קבצים מערוץ (לפי טווח).\n"
+            "<blockquote>• <code>/index</code> [link] - [start] - הוספת קבצים מערוץ (לפי טווח).\n"
             "• <code>/newindex</code> [ID] - מעקב אחרי תוכן חדש בערוץ.\n"
-            "• <code>/channels</code> - ניהול ערוצים במעקב.\n\n"
+            "• <code>/channels</code> - ניהול ערוצים במעקב.</blockquote>\n\n"
             "<b>◉ משתמשים וקבוצות:</b>\n"
-            "• <code>/ban</code> [ID] - חסימת משתמש.\n"
+            "<blockquote>• <code>/ban</code> [ID] - חסימת משתמש.\n"
             "• <code>/unban</code> [ID] - שחרור משתמש.\n"
             "• <code>/ban_chat</code> [ID] - חסימת קבוצה.\n"
             "• <code>/unban_chat</code> [ID] - שחרור קבוצה.\n"
-            "• <code>/leave</code> [ID] - יציאה מקבוצה (ללא חסימה).\n\n"
+            "• <code>/leave</code> [ID] - יציאה מקבוצה (ללא חסימה).</blockquote>\n\n"
             "<b>◉ מערכת:</b>\n"
-            "• <code>/clean</code> - אשף ניקוי נתונים.\n"
+            "<blockquote>• <code>/clean</code> - אשף ניקוי נתונים.\n"
             "• <code>/broadcast</code> [-f] - שידור למנויים.\n"
             "• <code>/broadcast_groups</code> - שידור לקבוצות.\n"
-            "• <code>/restart</code> - הפעלה מחדש."
+            "• <code>/restart</code> - הפעלה מחדש.</blockquote>"
         )
         await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('חזרה ⋟', callback_data='help')]]))
 
     elif data == "help_guide":
         txt = (
-    "⚙️ <b><u>מדריך לחיפוש ברובוט החיפוש</u></b> ⚙️\n\n"
-    "<i>כדי לבקש סרט או סדרה, יש לשים לב לדרך בה אתם מבקשים.\n"
-    "חשוב לכתוב את השם המדויק של הסרט או הסדרה שברצונכם למצוא.</i>\n\n"
-    "<b><i><u>דוגמאות לחיפוש נכון ✔️</u></i></b>\n"
-    "אשמתי\n"
-    "מהיר ועצבני\n\n"
-    "<b><i><u>דוגמאות לא נכונות ❌</u></i></b>\n"
-    "יש הארי פוטר?\n"
-    "אפשר הארי פוטר\n"
-    "יש את הסרט הארי פוטר?\n\n"
-    "<b>הבנתם? מעולה!\n"
-    "נסו עכשיו בקבוצה!</b>"
+            "<blockquote>"
+            "⚙️ <b><u> מדריך לחיפוש ברובוט החיפוש</u></b> 💡\n\n"
+            "כדי לבקש סרט או סדרה, יש לשים לב לדרך בה אתם מבקשים. חשוב לכתוב את השם המדויק של הסרט או הסדרה שברצונכם למצוא.\n\n"
+            "<b><i><u>דוגמאות לחיפוש נכון </u></i></b>✔️\n"
+            "אשמתי\n"
+            "מהיר ועצבני\n\n"
+            "<b><i><u>דוגמאות לא נכונות </u></i></b>❌\n"
+            "יש הארי פוטר?\n"
+            "אפשר הארי פוטר\n"
+            "יש את הסרט הארי פוטר?\n\n"
+            "<b>הבנתם? מעולה!</b>\n"
+            "<b>נסו עכשיו בקבוצה!</b>\n\n"
+            "<b>לא הבנתם</b> <b>⁉️</b>\n"
+            "<b>אל תדאגו</b> ‼️\n"
+            "אנחנו כאן כדי לעזור! הצוות המעולה שלנו תמיד זמין לענות על בקשות ⚡️\n"
+            "זהו פשוט עוד דרך חכמה למענה מהיר יותר"
+            "</blockquote>"
 )
-        btn = [[InlineKeyboardButton('• למעבר לקבוצה •', url=REQUEST_GROUP)], [InlineKeyboardButton('חזרה ⋟', callback_data='help')]]
+
+        btn = [[InlineKeyboardButton('למעבר לקבוצה 💬', url=REQUEST_GROUP)], [InlineKeyboardButton('חזרה ⋟', callback_data='help')]]
         await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup(btn))
 
     elif data == "help_copyright":
@@ -233,9 +240,9 @@ async def callback_handler(client, query: CallbackQuery):
             
             db_info = (
                 f"🗄 <u>**אחסון דאטה בייס:**</u>\n"
-                f"**★ בשימוש:** `{used_size}`\n"
+                f"<blockquote>**★ בשימוש:** `{used_size}`\n"
                 f"**★ מתוך:** `{max_size}`\n"
-                f"★ **סטטוס:** [{bar}] `{percentage:.2f}%`"
+                f"★ **סטטוס:** [{bar}] `{percentage:.2f}%`</blockquote>"
             )
         except Exception as e:
             db_info = f"❌ לא ניתן לשלוף נתונים טכניים.\n`{e}`"
@@ -243,9 +250,9 @@ async def callback_handler(client, query: CallbackQuery):
         txt = (
             f"📊 <u>**סטטיסטיקות הבוט:**</u>\n\n"
             f"🤖 <u>**סטטוס בוט:**</u>\n"
-            f"★ **קבצים:** `{files}`\n"
+            f"<blockquote>★ **קבצים:** `{files}`\n"
             f"★ **משתמשים:** `{users}`\n"
-            f"★ **קבוצות:** `{groups}`\n\n"
+            f"★ **קבוצות:** `{groups}`</blockquote>\n\n"
             f"{db_info}"
         )
         
@@ -262,7 +269,7 @@ async def callback_handler(client, query: CallbackQuery):
         bot_username = client.me.username
         bot_mention = f"[{bot_name}](https://t.me/{bot_username})"
         txt = (
-            "<b>╔════❰ 𝗔𝗯𝗼𝘂𝘁 𝗧𝗵𝗲 𝗕𝗼𝘁 ❱═❍⊱❁۪۪</b>\n"
+            "<blockquote><b>╔════❰ 𝗔𝗯𝗼𝘂𝘁 𝗧𝗵𝗲 𝗕𝗼𝘁 ❱═❍⊱❁۪۪</b>\n"
             "<b>║╭━━━━━━━━━━━━━━━➣</b>\n"
             f"<b>║┣⪼ 🤖 ʙᴏᴛ : {bot_mention}</b>\n"
             "<b>║┣⪼ 👦 ᴄʀᴇᴀᴛᴏʀ : @BOSS1480</b>\n"
@@ -271,7 +278,7 @@ async def callback_handler(client, query: CallbackQuery):
             "<b>║┣⪼ 📚 Lɪʙʀᴀʀʏ : [Pyrogram](https://docs.pyrogram.org/)</b>\n"
             "<b>║┣⪼ &lt;/&gt; Sᴏᴜʀᴄᴇ: : [GitHub](https://github.com/TJ-Bots/Search-Movies)</b>\n"
             "<b>║╰━━━━━━━━━━━━━━━➣</b>\n"
-            "<b>╚══════════════════❍⊱❁۪۪</b>"
+            "<b>╚══════════════════❍⊱❁۪۪</b></blockquote>"
         )
         btn = [
             [InlineKeyboardButton('≈ 𝚜𝚘𝚞𝚛𝚌𝚎 𝚌𝚘𝚍𝚎 ≈', url='https://github.com/TJ-Bots/Search-Movies')], 
@@ -283,11 +290,10 @@ async def callback_handler(client, query: CallbackQuery):
         txt = (
             "<b><u>📥 הורדה מטיקטוק:</u></b>\n\n"
             "<b>◉ הורדה רגילה:</b>\n"
-            "• <code>/d</code> [קישור] - שולחים את הפקודה ואחריה את הקישור.\n\n"
+            "<blockquote>• <code>/d</code> [קישור] - שולחים את הפקודה ואחריה את הקישור.</blockquote>\n\n"
             "<b>◉ הורדה בתגובה:</b>\n"
-            "• <code>/d</code> - מגיבים עם הפקודה על הודעה שמכילה קישור.\n\n"
-            "<b>• הערה:</b>\n"
-            "• הבוט תומך כרגע בהורדת <b>סרטונים בלבד</b> מטיקטוק (וידאו).\n"
+            "<blockquote>• <code>/d</code> - מגיבים עם הפקודה על הודעה שמכילה קישור.</blockquote>\n\n"
+            "<blockquote>**הבוט תומך בהורדת סרטונים בלבד.**</blockquote>\n"
         )
         await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('חזרה ⋟', callback_data='help')]]))
 
