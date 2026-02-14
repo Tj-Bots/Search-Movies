@@ -269,11 +269,12 @@ async def callback_handler(client, query: CallbackQuery):
             f"<b>║┣⪼ 🤖 ᴜᴘᴅᴀᴛᴇ : <a href='https://t.me/{UPDATE_CHANNEL}'>Update Channel</a></b>\n"
             "<b>║┣⪼ 🗣️ ʟᴀɴɢᴜᴀɢᴇ : [Python](https://www.python.org/)</b>\n"
             "<b>║┣⪼ 📚 Lɪʙʀᴀʀʏ : [Pyrogram](https://docs.pyrogram.org/)</b>\n"
+            "<b>║┣⪼ &lt;/&gt; Sᴏᴜʀᴄᴇ: : [GitHub](https://github.com/TJ-Bots/Search-Movies)</b>\n"
             "<b>║╰━━━━━━━━━━━━━━━➣</b>\n"
             "<b>╚══════════════════❍⊱❁۪۪</b>"
         )
         btn = [
-            [InlineKeyboardButton('≈ 𝚜𝚘𝚞𝚛𝚌𝚎 𝚌𝚘𝚍𝚎 ≈', url='https://t.me/TJSourceCode')], 
+            [InlineKeyboardButton('≈ 𝚜𝚘𝚞𝚛𝚌𝚎 𝚌𝚘𝚍𝚎 ≈', url='https://github.com/TJ-Bots/Search-Movies')], 
             [InlineKeyboardButton('חזרה ⋟', callback_data='home'), InlineKeyboardButton('✘ סגור', callback_data='closea')]
         ]
         await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup(btn))
