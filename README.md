@@ -2,7 +2,7 @@
 
 בוט טלגרם לחיפוש סרטים במהירות ובנוחות.
 
-#
+
 <h1 align="center">
   AUTO FILTER BOT
 </h1>
