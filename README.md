@@ -1,6 +1,5 @@
-<h1 align="center">
-  VJ FILTER BOT
-</h1>
+![Typing SVG](https://readme-typing-svg.herokuapp.com/?lines=Welcome+To+ TJ+Filter+Bot!)
+</p>
 
 # ***חיפוש סרטים***
 
