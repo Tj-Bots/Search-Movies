@@ -9,7 +9,7 @@ def get_readable_size(size):
     return f"{size:.2f} TB"
 
 def clean_filename(name):
-    name = re.sub(r'\b(mkv|mp4|avi)\b', '', name, flags=re.IGNORECASE)
+    name = re.sub(r'\b(.mkv|.mp4|.avi)\b', '', name, flags=re.IGNORECASE)
     return re.sub(r'\s+', ' ', name).strip()
 
 async def is_admin(client, chat_id, user_id):
