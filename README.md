@@ -1,4 +1,4 @@
-![Typing SVG](https://readme-typing-svg.herokuapp.com/?lines=ברוכים+הבאים+לבוט+חיפוש+סרטים+סדרות!)
+![Typing SVG](https://readme-typing-svg.herokuapp.com/?lines=Welcome+To+My+Search+Movies+Bot!)
 
 # ***חיפוש סרטים***
 
