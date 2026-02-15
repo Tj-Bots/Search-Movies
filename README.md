@@ -1,4 +1,4 @@
-![Typing SVG](https://readme-typing-svg.herokuapp.com/?lines=Welcome+To+ TJ+Filter+Bot!)
+![Typing SVG](https://readme-typing-svg.herokuapp.com/?lines=Welcome+To+TJ+Filter+Bot!)
 </p>
 
 # ***חיפוש סרטים***
