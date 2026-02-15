@@ -1,8 +1,8 @@
 ![Typing SVG](https://readme-typing-svg.herokuapp.com/?lines=Welcome+To+My+Search+Movies+Bot!)
 
-# ***חיפוש סרטים***
+# ***Search-Movies***
 
-בוט טלגרם לחיפוש סרטים במהירות ובנוחות.
+זהו בוט טלגרם לחיפוש סרטים במהירות ובנוחות.
 
 #
 # ⚙️ פקודות הבוט
