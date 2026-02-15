@@ -1,10 +1,8 @@
-![Typing SVG](https://readme-typing-svg.herokuapp.com/?lines=Welcome+To+TJ+Filter+Bot!)
-</p>
+![Typing SVG](https://readme-typing-svg.herokuapp.com/?lines=ברוכים+הבאים+לבוט+חיפוש+סרטים+סדרות!)
 
 # ***חיפוש סרטים***
 
 בוט טלגרם לחיפוש סרטים במהירות ובנוחות.
-
 
 #
 # ⚙️ פקודות הבוט
