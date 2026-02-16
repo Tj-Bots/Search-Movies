@@ -1,6 +1,7 @@
 from pyrogram import Client, filters, enums
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from database import db
+from config import UPDATE_CHANNEL
 from .utils import get_readable_size, clean_filename
 import asyncio
 
@@ -36,6 +37,12 @@ async def search_handler(client, message):
     except Exception as e:
         print(f"Error sending results: {e}")
 
+@Client.on_callback_query(filters.regex(r"^dl_"))
+async def handle_search_click(client, query: CallbackQuery):
+    file_id = query.data.split("_")[1]
+    bot_username = client.me.username
+    await query.answer(url=f"https://t.me/{bot_username}?start={file_id}")
+
 @Client.on_callback_query(filters.regex(r"^search#"))
 async def search_pagination(client, query):
     try:
@@ -59,13 +66,7 @@ async def send_results_page(client, message, results, page, query, settings, is_
     start_idx = (page - 1) * per_page
     current_batch = results[start_idx : start_idx + per_page]
     
-    bot_username = client.me.username
-    if not bot_username:
-        try:
-            me = await client.get_me()
-            bot_username = me.username
-        except:
-            bot_username = "Bot"
+    bot_username = client.me.username or "Bot"
 
     text = f"**🔍 תוצאות חיפוש 🎬**\n\n"
     text += f"📄 **שאילתה:** `{query}`\n"
@@ -81,7 +82,9 @@ async def send_results_page(client, message, results, page, query, settings, is_
             size = get_readable_size(res['file_size'])
             btn_text = f"[{size}] {clean}"
             file_id = str(res['_id'])
-            keyboard.append([InlineKeyboardButton(btn_text, url=f"https://t.me/{bot_username}?start={file_id}")])
+            
+            keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"dl_{file_id}")])
+            
     else:
         chars = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט', 'י']
         for i, res in enumerate(current_batch):
@@ -89,7 +92,7 @@ async def send_results_page(client, message, results, page, query, settings, is_
             clean = clean_filename(res['file_name'])
             file_id = str(res['_id'])
             link = f"https://t.me/{bot_username}?start={file_id}"
-            text += f"🎬 {prefix}. [**{clean}**]({link})\n\n"
+            text += f"🎬 **{prefix}. [{clean}]({link})**\n\n"
 
     nav = []
     if page > 1: nav.append(InlineKeyboardButton('⬅️', callback_data=f"search#{query}#{page-1}"))
