@@ -17,4 +17,4 @@ LOG_CHANNEL = int(os.environ.get("LOG_CHANNEL", "0"))
 UPDATE_CHANNEL = "amoviesnww1o"
 REQUEST_GROUP = "https://t.me/+t0Bi1P95xps1Mzk0"
 
-PHOTO_URL = "https://telegra.ph/file/3fa89085f20e4e7e6e38b-c522eb8a573d3961e6.jpg"
+PHOTO_URL = "https://i.ibb.co/BK2j0c7p/x.jpg"
