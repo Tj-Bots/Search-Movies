@@ -88,6 +88,7 @@
 | `UPDATE_CHANNEL` | ❌ | שם המשתמש של הערוץ (בלי @) |
 | `REQUEST_GROUP` | ❌ | קישור לקבוצת הבקשות/תמיכה |
 | `PHOTO_URL` | ❌ | קישור ישיר לתמונה (שישמש כקאבר לבוט) |
+| `AUTH_CHANNEL_FORCE` | ❌ | חיוב הרשמה לערוץ עדכונים. False או True |
 
 </details>
 
