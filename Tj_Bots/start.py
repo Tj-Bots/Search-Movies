@@ -1,8 +1,48 @@
 import asyncio
 from pyrogram import Client, filters, enums
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, InputMediaPhoto
-from config import UPDATE_CHANNEL, REQUEST_GROUP, PHOTO_URL, ADMINS, LOG_CHANNEL
+from config import UPDATE_CHANNEL, REQUEST_GROUP, PHOTO_URL, ADMINS, LOG_CHANNEL, AUTH_CHANNEL_FORCE
 from database import db
+from .utils import get_readable_size
+
+async def send_file_with_fallback(client, chat_id, file_data, reply_to_id=None):
+    try:
+        await client.copy_message(
+            chat_id=chat_id,
+            from_chat_id=file_data['chat_id'],
+            message_id=file_data['message_id'],
+            caption=None,
+            reply_to_message_id=reply_to_id
+        )
+        return True
+    except:
+        file_id = file_data.get('file_id')
+        if not file_id:
+            return False
+            
+        file_name = file_data.get('file_name', '')
+        file_size = get_readable_size(file_data.get('file_size', 0))
+        fallback_caption = f"**{file_name}**\n\n**💾 גודל: {file_size}**"
+        
+        try:
+            await client.send_video(
+                chat_id=chat_id,
+                video=file_id,
+                caption=fallback_caption,
+                reply_to_message_id=reply_to_id
+            )
+            return True
+        except:
+            try:
+                await client.send_document(
+                    chat_id=chat_id,
+                    document=file_id,
+                    caption=fallback_caption,
+                    reply_to_message_id=reply_to_id
+                )
+                return True
+            except:
+                return False
 
 @Client.on_message(filters.command("start"))
 async def start_command(client, message):
@@ -11,9 +51,17 @@ async def start_command(client, message):
         
         if len(message.command) > 1:
             file_db_id = message.command[1]
-            try:
-                await client.get_chat_member(UPDATE_CHANNEL, user_id)
-            except:
+            
+            should_check = AUTH_CHANNEL_FORCE
+            is_subbed = True
+            
+            if should_check:
+                try:
+                    await client.get_chat_member(UPDATE_CHANNEL, user_id)
+                except:
+                    is_subbed = False
+
+            if not is_subbed:
                 btn = [[InlineKeyboardButton('📣 להרשמה לערוץ', url=f'https://t.me/{UPDATE_CHANNEL}')],
                        [InlineKeyboardButton('↻ נסה שוב', callback_data=f"checksub_{file_db_id}")]]
                 
@@ -25,15 +73,8 @@ async def start_command(client, message):
 
             file_data = await db.get_file(file_db_id)
             if file_data:
-                try:
-                    await client.copy_message(
-                        chat_id=message.chat.id,
-                        from_chat_id=file_data['chat_id'],
-                        message_id=file_data['message_id'],
-                        caption=None,
-                        reply_to_message_id=message.id
-                    )
-                except:
+                success = await send_file_with_fallback(client, message.chat.id, file_data, message.id)
+                if not success:
                     await message.reply("❌ הקובץ נמחק מהמקור או שאין לי גישה אליו.", quote=True)
             return
 
@@ -102,26 +143,26 @@ async def callback_handler(client, query: CallbackQuery):
 
     if data.startswith("checksub_"):
         file_db_id = data.split("_")[1]
-        try:
-            await client.get_chat_member(UPDATE_CHANNEL, user_id)
-        except:
+        
+        should_check = AUTH_CHANNEL_FORCE
+        is_subbed = True
+        
+        if should_check:
+            try:
+                await client.get_chat_member(UPDATE_CHANNEL, user_id)
+            except:
+                is_subbed = False
+
+        if not is_subbed:
             return await query.answer("❌ עדיין לא נרשמת לערוץ! עליך להירשם כדי לקבל את הקובץ.", show_alert=True)
         
         file_data = await db.get_file(file_db_id)
         if file_data:
-            try:
-                # מנסה למצוא את ההודעה המקורית (ה-start) כדי להגיב עליה
-                reply_to = query.message.reply_to_message.id if query.message.reply_to_message else None
-                
-                await client.copy_message(
-                    chat_id=query.message.chat.id,
-                    from_chat_id=file_data['chat_id'],
-                    message_id=file_data['message_id'],
-                    caption=None,
-                    reply_to_message_id=reply_to
-                )
+            reply_to = query.message.reply_to_message.id if query.message.reply_to_message else None
+            success = await send_file_with_fallback(client, query.message.chat.id, file_data, reply_to)
+            if success:
                 await query.message.delete()
-            except:
+            else:
                 await query.answer("❌ הקובץ נמחק מהמקור או שאין לי גישה אליו.", show_alert=True)
         else:
             await query.answer("❌ הקובץ לא נמצא במסד הנתונים.", show_alert=True)
