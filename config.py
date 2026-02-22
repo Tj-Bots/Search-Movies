@@ -18,3 +18,5 @@ UPDATE_CHANNEL = "searchgram_bots"
 REQUEST_GROUP = "https://t.me/searchgram_group
 
 PHOTO_URL = "https://i.ibb.co/BK2j0c7p/x.jpg"
+
+AUTH_CHANNEL_FORCE = os.environ.get("AUTH_CHANNEL_FORCE", "False").lower() == "true"
