@@ -15,10 +15,14 @@ async def global_logger(client, message):
         if is_new:
             try:
                 log_text = (
-                    "#NewUser\n"
-                    f"ID: <code>{user_id}</code>\n"
-                    f"Name: <a href='tg://user?id={user_id}'>{first_name}</a>\n"
-                    f"Action: Sent a message"
+                    "<b>╔════❰ <i>#NewUser</i> ❱════❍</b>\n"
+                    "<b>║╭━━━━━━━━━━━━━━━➣</b>\n"
+                    f"<b>║┣⪼ 🪪 ID:</b> <code>{user_id}</code>\n"
+                    f"<b>║┣⪼ 🏷️ Name:</b> <a href='tg://user?id={user_id}'>{first_name}</a>\n"
+                    f"<b>║┣⪼ 📌 Action:</b> Sent a message\n"
+                    "<b>║╰━━━━━━━━━━━━━━━➣</b>\n"
+                    "<b>╚═════════════════❍</b>"
+ 
                 )
                 await client.send_message(LOG_CHANNEL, log_text, parse_mode=enums.ParseMode.HTML)
             except: pass
@@ -47,10 +51,13 @@ async def global_logger(client, message):
 
             try:
                 log_text = (
-                    "#NewGroup\n"
-                    f"Group: {group_link} (<code>{chat.id}</code>)\n"
-                    f"Members: <code>{count}</code>\n"
-                    f"Active User: <a href='tg://user?id={adder_id}'>{adder_name}</a>"
+                    "<b>╔════❰ <i>#NewGroup</i> ❱════❍</b>\n"
+                    "<b>║╭━━━━━━━━━━━━━━━➣</b>\n"
+                    f"<b>║┣⪼ 💬 Group:</b> {group_link} (<code>{chat.id}</code>)\n"
+                    f"<b>║┣⪼ 👥 Members:</b> <code>{count}</code>\n"
+                    f"<b>║┣⪼ 📌 Active User:</b> <a href='tg://user?id={adder_id}'>{adder_name}</a>"
+                    "<b>║╰━━━━━━━━━━━━━━━➣</b>\n"
+                    "<b>╚═════════════════❍</b>"
                 )
                 await client.send_message(LOG_CHANNEL, log_text, parse_mode=enums.ParseMode.HTML)
             except Exception as e:
