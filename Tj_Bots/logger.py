@@ -55,7 +55,7 @@ async def global_logger(client, message):
                     "<b>║╭━━━━━━━━━━━━━━━➣</b>\n"
                     f"<b>║┣⪼ 💬 Group:</b> {group_link} (<code>{chat.id}</code>)\n"
                     f"<b>║┣⪼ 👥 Members:</b> <code>{count}</code>\n"
-                    f"<b>║┣⪼ 📌 Active User:</b> <a href='tg://user?id={adder_id}'>{adder_name}</a>"
+                    f"<b>║┣⪼ 📌 Active User:</b> <a href='tg://user?id={adder_id}'>{adder_name}</a>\n"
                     "<b>║╰━━━━━━━━━━━━━━━➣</b>\n"
                     "<b>╚═════════════════❍</b>"
                 )
