@@ -1,3 +1,5 @@
+![SearchGram](https://i.ibb.co/j95G7mCX/x.jpg)
+
 ![Typing SVG](https://readme-typing-svg.herokuapp.com/?lines=Welcome+To+My+Search+Movies+Bot!)
 
 # ***Search-Movies***
