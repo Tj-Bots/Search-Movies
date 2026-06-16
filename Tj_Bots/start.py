@@ -178,7 +178,7 @@ async def callback_handler(client, query: CallbackQuery):
                 InputMediaPhoto(PHOTO_URL, caption=""),
                 reply_markup=None 
             )
-            await asyncio.sleep(0.2)
+            await asyncio.sleep(0.1)
         except:
             pass
     
