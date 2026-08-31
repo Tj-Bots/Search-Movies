@@ -37,6 +37,26 @@ def _time_until_reset():
 
 
 async def check_quota(user_id):
+    """Read-only: True if the user is currently allowed to run a search."""
+    if user_id in ADMINS:
+        return True
+
+    quota = await db.get_search_quota(user_id)
+
+    if quota['unlimited_until'] > time.time():
+        return True
+
+    today = _today_str()
+    free_used = quota['free_used'] if quota['free_date'] == today else 0
+    if free_used < FREE_DAILY_SEARCHES:
+        return True
+
+    return quota['search_credits'] > 0
+
+
+async def consume_search(user_id):
+    """Call only after a search actually returned results - a search with no
+    results doesn't cost anything."""
     quota = await db.get_search_quota(user_id)
 
     today = _today_str()
@@ -46,16 +66,16 @@ async def check_quota(user_id):
 
     if user_id in ADMINS:
         await db.increment_free_usage(user_id)
-        return True
+        return
 
     if quota['unlimited_until'] > time.time():
-        return True
+        return
 
     if quota['free_used'] < FREE_DAILY_SEARCHES:
         await db.increment_free_usage(user_id)
-        return True
+        return
 
-    return await db.use_search_credit(user_id)
+    await db.use_search_credit(user_id)
 
 
 def denial_text():

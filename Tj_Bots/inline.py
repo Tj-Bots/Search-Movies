@@ -11,7 +11,7 @@ from pyrogram.types import (
 )
 from database import db
 from config import PHOTO_URL
-from .pay import check_quota, denial_text
+from .pay import check_quota, consume_search, denial_text
 
 @Client.on_inline_query()
 async def inline_search(client: Client, query: InlineQuery):
@@ -65,6 +65,7 @@ async def inline_search(client: Client, query: InlineQuery):
             )
         )
     else:
+        await consume_search(query.from_user.id)
         for file in files[:50]:
             f_name = file['file_name']
             file_id = file['file_id']

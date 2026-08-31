@@ -4,7 +4,7 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQ
 from database import db
 from config import UPDATE_CHANNEL
 from .utils import get_readable_size, clean_filename
-from .pay import check_quota, out_of_quota_markup, denial_text
+from .pay import check_quota, consume_search, out_of_quota_markup, denial_text
 import asyncio
 
 @Client.on_message(filters.text & ~filters.command(["start", "index", "newindex", "settings", "broadcast", "broadcast_groups", "stats", "restart", "clean", "channels", "watch", "font", "share", "tts", "paste", "buy", "status"]))
@@ -31,7 +31,7 @@ async def search_handler(client, message):
         )
 
     results = await db.search_files(query)
-    
+
     if not results:
         try:
             msg = await message.reply(f"**לא נמצאו תוצאות לחיפוש: `{query}`** <tg-emoji emoji-id='5924497670721769339'>🙅‍♂️</tg-emoji>", quote=True)
@@ -40,6 +40,9 @@ async def search_handler(client, message):
         except:
             pass
         return
+
+    if message.from_user:
+        await consume_search(message.from_user.id)
 
     try:
         await send_results_page(client, message, results, 1, query, settings)
