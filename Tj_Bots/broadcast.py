@@ -13,28 +13,50 @@ AUDIENCE_LABELS = {
     "all": "🌍 הכל (משתמשים + קבוצות)",
 }
 
+COLOR_CYCLE = ['normal', 'blue', 'green', 'red']
+COLOR_STYLE_MAP = {
+    'normal': None,
+    'blue': enums.ButtonStyle.PRIMARY,
+    'green': enums.ButtonStyle.SUCCESS,
+    'red': enums.ButtonStyle.DANGER,
+}
+COLOR_DOT = {'normal': '⚪️', 'blue': '🔵', 'green': '🟢', 'red': '🔴'}
+
 
 def _new_state(panel_chat, panel_msg):
     return {
         'panel_chat': panel_chat, 'panel_msg': panel_msg,
         'audience': None, 'src_chat': None, 'src_msg': None,
-        'buttons': None, 'pin': False, 'mode': 'copy', 'step': None,
+        'buttons': [], 'pin': False, 'mode': 'copy', 'step': None,
     }
+
+
+def _build_buttons_markup(buttons):
+    if not buttons:
+        return None
+    rows = []
+    for b in buttons:
+        style = COLOR_STYLE_MAP.get(b['color'])
+        kwargs = {'url': b['url']}
+        if style:
+            kwargs['style'] = style
+        rows.append([InlineKeyboardButton(b['label'], **kwargs)])
+    return InlineKeyboardMarkup(rows)
 
 
 def _composer_markup(state):
     audience_label = AUDIENCE_LABELS.get(state['audience'], '❗ לא נבחר')
-    content_status = '✅ הוגדר (למעלה 👆)' if state['src_msg'] else '➖ ריק'
-    buttons_status = f"✅ {len(state['buttons'])} כפתורים" if state.get('buttons') else '➖ ריק'
+    content_label = '📨 הודעה ✅' if state['src_msg'] else '📨 הודעה'
+    buttons_label = f"⌨️ כפתורים ✅{len(state['buttons'])}" if state['buttons'] else '⌨️ כפתורים'
     pin_label = '📌 נעיצה: ✓' if state['pin'] else '📌 נעיצה: ✘'
     mode_label = '🔁 Forward' if state['mode'] == 'forward' else '📋 Copy'
 
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(f'🎯 יעד: {audience_label}', callback_data='bc2_audience')],
-        [InlineKeyboardButton('📨 הודעה', callback_data='bc2_content'),
-         InlineKeyboardButton(content_status, callback_data='bc2_view_content' if state['src_msg'] else 'noop')],
-        [InlineKeyboardButton('⌨️ כפתורים', callback_data='bc2_buttons'),
-         InlineKeyboardButton(buttons_status, callback_data='bc2_view_buttons' if state.get('buttons') else 'noop')],
+        [InlineKeyboardButton(content_label, callback_data='noop'),
+         InlineKeyboardButton('👀 צפה', callback_data='bc2_view_content')],
+        [InlineKeyboardButton(buttons_label, callback_data='bc2_buttons'),
+         InlineKeyboardButton('👀 צפה', callback_data='bc2_view_buttons')],
         [InlineKeyboardButton(pin_label, callback_data='bc2_toggle_pin', style=enums.ButtonStyle.SUCCESS if state['pin'] else enums.ButtonStyle.DANGER),
          InlineKeyboardButton(mode_label, callback_data='bc2_toggle_mode')],
         [InlineKeyboardButton('👀 תצוגה מקדימה מלאה', callback_data='bc2_full_preview')],
@@ -44,8 +66,12 @@ def _composer_markup(state):
 
 
 def _composer_text(state):
-    text = "📢 <b>עריכת שידור</b>\n\nהגדר את כל השדות ולחץ 'שדר עכשיו' כשסיימת."
-    if state.get('buttons') and state['mode'] == 'forward':
+    text = (
+        "📢 <b>עריכת שידור</b>\n\n"
+        "📝 שלח לי כל הודעה (טקסט / מדיה / Forward) בכל רגע - היא תיהפך לתוכן השידור.\n\n"
+        "הגדר את שאר השדות ולחץ 'שדר עכשיו' כשסיימת."
+    )
+    if state['buttons'] and state['mode'] == 'forward':
         text += "\n\n⚠️ במצב Forward לא ניתן לצרף כפתורים - הם לא יישלחו."
     return text
 
@@ -58,6 +84,29 @@ async def _refresh_composer(client, state):
     await client.edit_message_caption(
         state['panel_chat'], state['panel_msg'], caption=_composer_text(state), reply_markup=_composer_markup(state)
     )
+
+
+def _buttons_editor_markup(state):
+    keyboard = []
+    for i, b in enumerate(state['buttons']):
+        style = COLOR_STYLE_MAP.get(b['color'])
+        kwargs = {'callback_data': 'noop'}
+        if style:
+            kwargs['style'] = style
+        keyboard.append([
+            InlineKeyboardButton(b['label'], **kwargs),
+            InlineKeyboardButton(f"{COLOR_DOT[b['color']]} 🔁", callback_data=f'bc2_color_{i}'),
+        ])
+    keyboard.append([InlineKeyboardButton('➕ הוסף כפתורים', callback_data='bc2_buttons_more')])
+    if state['buttons']:
+        keyboard.append([InlineKeyboardButton('🗑 מחק הכל', callback_data='bc2_buttons_clear', style=enums.ButtonStyle.DANGER)])
+    keyboard.append([InlineKeyboardButton('✅ סיום', callback_data='bc2_buttons_done', style=enums.ButtonStyle.SUCCESS)])
+    return InlineKeyboardMarkup(keyboard)
+
+
+async def _show_buttons_editor(client, state):
+    text = "⌨️ <b>עריכת כפתורים</b>\n\nלחץ 🔁 ליד כפתור כדי לשנות את צבעו:\nרגיל ⚪️ ← כחול 🔵 ← ירוק 🟢 ← אדום 🔴"
+    await client.edit_message_caption(state['panel_chat'], state['panel_msg'], caption=text, reply_markup=_buttons_editor_markup(state))
 
 
 async def _clear_stash(client, state):
@@ -78,7 +127,7 @@ async def broadcast_command(client, message):
 
 def _is_awaiting_input(_, __, message):
     admin_id = message.from_user.id if message.from_user else None
-    return admin_id in BC_STATE and BC_STATE[admin_id].get('step') in ('await_content', 'await_buttons')
+    return admin_id in BC_STATE
 
 
 @Client.on_message(filters.user(ADMINS) & filters.create(_is_awaiting_input))
@@ -86,37 +135,38 @@ async def broadcast_input(client, message):
     admin_id = message.from_user.id
     state = BC_STATE[admin_id]
 
-    if state['step'] == 'await_content':
-        old_chat, old_msg = state.get('src_chat'), state.get('src_msg')
-        try:
-            stored = await message.copy(state['panel_chat'])
-        except Exception:
-            stored = None
+    if state['step'] == 'await_buttons':
+        new_buttons = _parse_buttons(message.text or "")
         try:
             await message.delete()
         except Exception:
             pass
+        if new_buttons:
+            state['buttons'].extend(new_buttons)
+        state['step'] = None
+        return await _show_buttons_editor(client, state)
+
+    # default (idle) - any message sent becomes the broadcast content
+    try:
+        stored = await message.copy(state['panel_chat'])
+    except Exception:
+        stored = None
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
+    if stored:
+        old_chat, old_msg = state.get('src_chat'), state.get('src_msg')
+        state['src_chat'] = stored.chat.id
+        state['src_msg'] = stored.id
         if old_msg:
             try:
                 await client.delete_messages(old_chat, old_msg)
             except Exception:
                 pass
-        if stored:
-            state['src_chat'] = stored.chat.id
-            state['src_msg'] = stored.id
-        state['step'] = None
-        return await _refresh_composer(client, state)
 
-    if state['step'] == 'await_buttons':
-        buttons = _parse_buttons(message.text or "")
-        try:
-            await message.delete()
-        except Exception:
-            pass
-        if buttons:
-            state['buttons'] = buttons
-        state['step'] = None
-        return await _refresh_composer(client, state)
+    await _refresh_composer(client, state)
 
 
 def _parse_buttons(text):
@@ -132,8 +182,8 @@ def _parse_buttons(text):
         label, url = label.strip(), url.strip()
         if not label or not url.startswith(('http://', 'https://', 'tg://')):
             continue
-        rows.append([InlineKeyboardButton(label, url=url)])
-    return rows or None
+        rows.append({'label': label, 'url': url, 'color': 'normal'})
+    return rows
 
 
 @Client.on_callback_query(filters.regex(r"^bc"))
@@ -177,18 +227,13 @@ async def broadcast_callback(client, query):
     if data == "bc2_back":
         return await _refresh_composer(client, state)
 
-    if data == "bc2_content":
-        state['step'] = 'await_content'
-        text = "📨 <b>שלח עכשיו את ההודעה לשידור</b> (טקסט / תמונה / וידאו / קובץ).\nאפשר גם להעביר (Forward) הודעה קיימת אליי."
-        markup = InlineKeyboardMarkup([[InlineKeyboardButton('🔙 חזרה לעריכה', callback_data='bc2_back')]])
-        return await query.message.edit_caption(text, reply_markup=markup)
-
     if data == "bc2_view_content":
-        if state['src_msg']:
-            try:
-                await client.copy_message(state['panel_chat'], state['src_chat'], state['src_msg'])
-            except Exception:
-                pass
+        if not state['src_msg']:
+            return await query.answer("❌ עדיין לא הוגדרה הודעה.", show_alert=True)
+        try:
+            await client.copy_message(state['panel_chat'], state['src_chat'], state['src_msg'])
+        except Exception as e:
+            return await query.answer(f"❌ שגיאה: {e}", show_alert=True)
         return await query.answer()
 
     if data == "bc2_buttons":
@@ -198,10 +243,29 @@ async def broadcast_callback(client, query):
         return await query.message.edit_caption(text, reply_markup=markup)
 
     if data == "bc2_view_buttons":
-        if state.get('buttons'):
-            listing = "\n".join(f"{row[0].text} → {row[0].url}" for row in state['buttons'])
-            return await query.answer(listing[:200], show_alert=True)
-        return await query.answer()
+        if not state['buttons']:
+            return await query.answer("❌ עדיין לא הוגדרו כפתורים.", show_alert=True)
+        return await _show_buttons_editor(client, state)
+
+    if data == "bc2_buttons_more":
+        state['step'] = 'await_buttons'
+        text = "⌨️ <b>שלח כפתורים נוספים</b>\n\nשורה אחת לכל כפתור:\n<code>טקסט - קישור</code>"
+        markup = InlineKeyboardMarkup([[InlineKeyboardButton('🔙 חזרה', callback_data='bc2_view_buttons')]])
+        return await query.message.edit_caption(text, reply_markup=markup)
+
+    if data == "bc2_buttons_clear":
+        state['buttons'] = []
+        return await _show_buttons_editor(client, state)
+
+    if data == "bc2_buttons_done":
+        return await _refresh_composer(client, state)
+
+    if data.startswith("bc2_color_"):
+        idx = int(data[len("bc2_color_"):])
+        if 0 <= idx < len(state['buttons']):
+            cur = state['buttons'][idx]['color']
+            state['buttons'][idx]['color'] = COLOR_CYCLE[(COLOR_CYCLE.index(cur) + 1) % len(COLOR_CYCLE)]
+        return await query.message.edit_reply_markup(_buttons_editor_markup(state))
 
     if data == "bc2_toggle_pin":
         state['pin'] = not state['pin']
@@ -214,7 +278,7 @@ async def broadcast_callback(client, query):
     if data == "bc2_full_preview":
         if not state['src_msg']:
             return await query.answer("❌ יש להגדיר הודעה קודם.", show_alert=True)
-        markup = InlineKeyboardMarkup(state['buttons']) if state.get('buttons') and state['mode'] == 'copy' else None
+        markup = _build_buttons_markup(state['buttons']) if state['mode'] == 'copy' else None
         try:
             if state['mode'] == 'forward':
                 await client.forward_messages(state['panel_chat'], state['src_chat'], state['src_msg'])
@@ -235,7 +299,7 @@ async def broadcast_callback(client, query):
 
 async def _run_broadcast(client, admin_id, state):
     panel_chat, panel_msg = state['panel_chat'], state['panel_msg']
-    buttons_markup = InlineKeyboardMarkup(state['buttons']) if state.get('buttons') and state['mode'] == 'copy' else None
+    buttons_markup = _build_buttons_markup(state['buttons']) if state['mode'] == 'copy' else None
 
     targets = []
     if state['audience'] in ('users', 'all'):
