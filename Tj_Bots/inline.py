@@ -55,6 +55,7 @@ async def inline_search(client: Client, query: InlineQuery):
         blocked_words = await db.get_blocked_words()
         lowered = string.lower()
         if any(w in lowered for w in blocked_words):
+            await db.increment_blocked_attempt(query.from_user.id)
             results.append(
                 InlineQueryResultArticle(
                     id=str(uuid.uuid4()),
@@ -98,6 +99,7 @@ async def inline_search(client: Client, query: InlineQuery):
         )
     else:
         await consume_search(query.from_user.id)
+        await db.log_user_search(query.from_user.id, string)
         for file in files[:50]:
             f_name = file['file_name']
             file_id = file['file_id']

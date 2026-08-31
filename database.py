@@ -17,6 +17,7 @@ class Database:
         self.purchases = None
         self.bot_config = None
         self.search_log = None
+        self.user_search_log = None
 
     async def init_database(self, bot):
         me = await bot.get_me()
@@ -31,6 +32,7 @@ class Database:
         self.purchases = self.db[f"{prefix}_purchases"]
         self.bot_config = self.db[f"{prefix}_bot_config"]
         self.search_log = self.db[f"{prefix}_search_log"]
+        self.user_search_log = self.db[f"{prefix}_user_search_log"]
 
     async def add_user(self, user_id, first_name):
         if self.users is None: return False
@@ -158,6 +160,20 @@ class Database:
         if self.banned_chats is None: return None
         return await self.banned_chats.find_one({'_id': chat_id})
 
+    async def get_banned_users_page(self, page, per_page=10):
+        skip = (page - 1) * per_page
+        cursor = self.banned.find({}).skip(skip).limit(per_page)
+        rows = await cursor.to_list(length=per_page)
+        total = await self.banned.count_documents({})
+        return rows, total
+
+    async def get_banned_chats_page(self, page, per_page=10):
+        skip = (page - 1) * per_page
+        cursor = self.banned_chats.find({}).skip(skip).limit(per_page)
+        rows = await cursor.to_list(length=per_page)
+        total = await self.banned_chats.count_documents({})
+        return rows, total
+
     async def get_search_quota(self, user_id):
         user = await self.users.find_one({'_id': user_id}) or {}
         return {
@@ -247,5 +263,17 @@ class Database:
 
     async def find_user(self, user_id):
         return await self.users.find_one({'_id': user_id})
+
+    async def increment_blocked_attempt(self, user_id):
+        await self.users.update_one({'_id': user_id}, {'$inc': {'blocked_attempts': 1}}, upsert=True)
+
+    async def log_user_search(self, user_id, query):
+        if self.user_search_log is None: return
+        await self.user_search_log.insert_one({'user_id': user_id, 'query': query, 'ts': time.time()})
+
+    async def get_user_search_history(self, user_id, limit=15):
+        if self.user_search_log is None: return []
+        cursor = self.user_search_log.find({'user_id': user_id}).sort('ts', -1).limit(limit)
+        return await cursor.to_list(length=limit)
 
 db = Database()

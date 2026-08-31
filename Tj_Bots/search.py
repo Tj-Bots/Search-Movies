@@ -32,6 +32,8 @@ async def search_handler(client, message):
         blocked_words = await db.get_blocked_words()
         lowered = query.lower()
         if any(w in lowered for w in blocked_words):
+            if message.from_user:
+                await db.increment_blocked_attempt(message.from_user.id)
             return await message.reply("🚫 **החיפוש הזה אינו מורשה.**", quote=True)
 
     if message.from_user and not await check_quota(message.from_user.id):
@@ -55,6 +57,7 @@ async def search_handler(client, message):
 
     if message.from_user:
         await consume_search(message.from_user.id)
+        await db.log_user_search(message.from_user.id, query)
 
     try:
         await send_results_page(client, message, results, 1, query, settings)
