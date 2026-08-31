@@ -149,7 +149,7 @@ async def broadcast_input(client, message):
     if not message.text:
         return await message.reply("⚠️ נתמך כרגע טקסט בלבד - שלח הודעת טקסט.", quote=True)
 
-    state['text'] = message.text
+    state['text'] = message.text.html
     try:
         await message.delete()
     except Exception:
@@ -225,11 +225,8 @@ async def broadcast_callback(client, query):
     if data == "bc2_view_content":
         if not state['text']:
             return await query.answer("❌ עדיין לא הוגדרה הודעה.", show_alert=True)
-        try:
-            await client.send_message(state['panel_chat'], state['text'])
-        except Exception as e:
-            return await query.answer(f"❌ שגיאה: {e}", show_alert=True)
-        return await query.answer()
+        markup = InlineKeyboardMarkup([[InlineKeyboardButton('🔙 חזרה לעריכה', callback_data='bc2_back')]])
+        return await query.message.edit_caption(state['text'], reply_markup=markup)
 
     if data == "bc2_buttons":
         state['step'] = 'await_buttons'

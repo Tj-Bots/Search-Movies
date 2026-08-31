@@ -34,7 +34,7 @@ async def _relay_to_admins(client, message, user_id):
         f"[<code>{user_id}</code>]\n\n"
         "<blockquote>↩️ <i>כדי לענות, השב להודעה זו.</i></blockquote>"
     )
-    profile_btn = InlineKeyboardMarkup([[InlineKeyboardButton('👤 פרופיל המשתמש', url=f"tg:user?id={user_id}")]])
+    profile_btn = InlineKeyboardMarkup([[InlineKeyboardButton('👤 פרופיל המשתמש', url=f"tg://openmessage?user_id={user_id}")]])
 
     for admin_id in ADMINS:
         try:
