@@ -40,9 +40,20 @@ def _time_until_reset():
     return f"{hours:02d}:{minutes:02d}"
 
 
+async def is_payments_enabled():
+    return await db.get_config('payments_enabled', True)
+
+
+async def get_free_daily_limit():
+    return await db.get_config('free_daily_limit', FREE_DAILY_SEARCHES)
+
+
 async def check_quota(user_id):
     """Read-only: True if the user is currently allowed to run a search."""
     if user_id in ADMINS:
+        return True
+
+    if not await is_payments_enabled():
         return True
 
     quota = await db.get_search_quota(user_id)
@@ -52,7 +63,8 @@ async def check_quota(user_id):
 
     today = _today_str()
     free_used = quota['free_used'] if quota['free_date'] == today else 0
-    if free_used < FREE_DAILY_SEARCHES:
+    limit = await get_free_daily_limit()
+    if free_used < limit:
         return True
 
     return quota['search_credits'] > 0
@@ -61,6 +73,9 @@ async def check_quota(user_id):
 async def consume_search(user_id):
     """Call only after a search actually returned results - a search with no
     results doesn't cost anything."""
+    if not await is_payments_enabled():
+        return
+
     quota = await db.get_search_quota(user_id)
 
     today = _today_str()
@@ -75,7 +90,8 @@ async def consume_search(user_id):
     if quota['unlimited_until'] > time.time():
         return
 
-    if quota['free_used'] < FREE_DAILY_SEARCHES:
+    limit = await get_free_daily_limit()
+    if quota['free_used'] < limit:
         await db.increment_free_usage(user_id)
         return
 
@@ -109,12 +125,16 @@ async def _status_block(user_id):
         ]
         return "<blockquote>" + "\n".join(lines) + "</blockquote>"
 
-    free_left = max(FREE_DAILY_SEARCHES - used_today, 0)
+    if not await is_payments_enabled():
+        return "<blockquote>🆓 <b>הבוט פתוח לגמרי בחינם וללא הגבלה כרגע.</b></blockquote>"
+
+    limit = await get_free_daily_limit()
+    free_left = max(limit - used_today, 0)
     now = time.time()
 
     lines = [
         "🆓 <b>קבצים חינמיים</b>",
-        f"נוצלו: <b>{used_today}</b> מתוך <b>{FREE_DAILY_SEARCHES}</b> (נשארו: <b>{free_left}</b>)",
+        f"נוצלו: <b>{used_today}</b> מתוך <b>{limit}</b> (נשארו: <b>{free_left}</b>)",
         f"⏳ מתאפס בעוד: <b>{_time_until_reset()}</b>",
         "",
         "💳 <b>קבצים בתשלום</b>",

@@ -4,12 +4,13 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from pyrogram import Client, filters, enums
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
-from config import ADMINS, PHOTO_URL, AUTH_CHANNEL_FORCE, FREE_DAILY_SEARCHES
+from config import ADMINS, PHOTO_URL, AUTH_CHANNEL_FORCE
 from database import db
 
 ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
 
 ADM_INPUT = {}
+ADM_SEARCH = {}
 USERS_PER_PAGE = 10
 
 PROMPTS = {
@@ -24,6 +25,7 @@ PROMPTS = {
     'find_group': {'label': 'איתור קבוצה', 'prompt': "שלח מזהה (ID) או שם קבוצה לחיפוש.", 'back': 'groups'},
     'watch_channel': {'label': 'הוספת ערוץ למעקב', 'prompt': "שלח את מזהה (ID) הערוץ להוספה למעקב.\nלדוגמה: <code>-1001234567890</code>", 'back': 'channels'},
     'start_index': {'label': 'התחלת אינדוקס', 'prompt': "שלח קישור לערוץ (ואפשר טווח התחלה), בדיוק כמו בפקודת /index.\nלדוגמה: <code>https://t.me/c/1234/1000</code>\nאו: <code>https://t.me/c/1234/1000 - 500</code>", 'back': 'channels'},
+    'set_freelimit': {'label': 'קביעת מכסת קבצים חינמית ליום', 'prompt': "שלח כמה קבצים חינמיים לאפשר ליום (מספר בלבד).\nלדוגמה: <code>7</code>", 'back': 'payments'},
 }
 
 USER_PROMPTS = {
@@ -148,7 +150,20 @@ async def _settings_menu_markup():
         [InlineKeyboardButton(auth_label, callback_data='adm_toggle_auth', style=enums.ButtonStyle.DANGER if auth_force else enums.ButtonStyle.SUCCESS)],
         [InlineKeyboardButton('✏️ שינוי ערוץ חיוב הרשמה', callback_data='adm_set_channel', style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('🚫 מילים חסומות בחיפוש', callback_data='adm_words_menu', style=enums.ButtonStyle.DANGER)],
+        [InlineKeyboardButton('💰 מערכת תשלומים', callback_data='adm_payments_menu', style=enums.ButtonStyle.SUCCESS)],
         [InlineKeyboardButton('חזרה ⋟', callback_data='adm_home', style=enums.ButtonStyle.PRIMARY)],
+    ])
+
+
+async def _payments_menu_markup():
+    from .pay import is_payments_enabled, get_free_daily_limit
+    enabled = await is_payments_enabled()
+    limit = await get_free_daily_limit()
+    pay_label = '💰 תשלומים בכוכבים: מופעל' if enabled else '🆓 תשלומים בכוכבים: כבוי (הכל חינם וללא הגבלה)'
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(pay_label, callback_data='adm_toggle_payments', style=enums.ButtonStyle.SUCCESS if enabled else enums.ButtonStyle.DANGER)],
+        [InlineKeyboardButton(f'✏️ קבצים חינמיים ליום: {limit}', callback_data='adm_set_freelimit', style=enums.ButtonStyle.PRIMARY)],
+        [InlineKeyboardButton('חזרה ⋟', callback_data='adm_settings', style=enums.ButtonStyle.PRIMARY)],
     ])
 
 
@@ -184,11 +199,13 @@ async def admin_command(client, message):
 # ---------- users browser ----------
 
 async def _render_user_info(user_id):
+    from .pay import get_free_daily_limit
     user = await db.find_user(user_id)
     if not user:
         return f"❌ המשתמש <code>{user_id}</code> לא נמצא במסד הנתונים."
 
     quota = await db.get_search_quota(user_id)
+    daily_limit = await get_free_daily_limit()
     ban_info = await db.get_ban_status(user_id)
     now = time.time()
 
@@ -212,7 +229,7 @@ async def _render_user_info(user_id):
         "<blockquote>"
         f"⏰ מנוי זמן ללא הגבלה: <b>{unlimited_line}</b>\n"
         f"💳 יתרת קבצים (בנק): <b>{quota['search_credits']}</b>\n"
-        f"🆓 קבצים חינמיים היום: <b>{free_used}/{FREE_DAILY_SEARCHES}</b>\n"
+        f"🆓 קבצים חינמיים היום: <b>{free_used}/{daily_limit}</b>\n"
         f"🚦 סטטוס חסימה: {ban_line}\n"
         f"⚠️ כמות עבירות (חיפושים אסורים): <b>{user.get('blocked_attempts', 0)}</b>"
         "</blockquote>"
@@ -328,6 +345,41 @@ def _group_actions_markup(chat_id, page, is_banned):
     ])
 
 
+# ---------- name/id search results (paginated) ----------
+
+def _search_results_text_markup(admin_id, page):
+    state = ADM_SEARCH.get(admin_id)
+    if not state:
+        return None, None
+
+    kind, term, matches = state['kind'], state['term'], state['matches']
+    total = len(matches)
+    total_pages = max((total + USERS_PER_PAGE - 1) // USERS_PER_PAGE, 1)
+    page = max(1, min(page, total_pages))
+    start = (page - 1) * USERS_PER_PAGE
+    batch = matches[start:start + USERS_PER_PAGE]
+
+    text = f"🔎 <b>נמצאו {total} תוצאות עבור '{term}':</b>"
+
+    if kind == 'user':
+        keyboard = [[InlineKeyboardButton(f"👤 {m.get('first_name', 'Unknown')} — {m['_id']}", callback_data=f"adm_userview_{m['_id']}_1")] for m in batch]
+        back_target = 'adm_users_1'
+    else:
+        keyboard = [[InlineKeyboardButton(f"💬 {m.get('title', 'Unknown')} — {m['_id']}", callback_data=f"adm_groupview_{m['_id']}_1")] for m in batch]
+        back_target = 'adm_groups_1'
+
+    nav = []
+    if page > 1:
+        nav.append(InlineKeyboardButton('⬅️', callback_data=f'adm_searchpage_{page - 1}'))
+    nav.append(InlineKeyboardButton(f'עמוד {page}/{total_pages}', callback_data='noop'))
+    if page < total_pages:
+        nav.append(InlineKeyboardButton('➡️', callback_data=f'adm_searchpage_{page + 1}'))
+    keyboard.append(nav)
+
+    keyboard.append([InlineKeyboardButton('חזרה ⋟', callback_data=back_target, style=enums.ButtonStyle.PRIMARY)])
+    return text, InlineKeyboardMarkup(keyboard)
+
+
 async def _groups_page_text_markup(page):
     groups, total = await db.get_groups_page(page, USERS_PER_PAGE)
     total_pages = max((total + USERS_PER_PAGE - 1) // USERS_PER_PAGE, 1)
@@ -432,6 +484,18 @@ async def admin_text_input(client, message):
             panel_chat, panel_msg, caption=f"✅ ערוץ העדכונים עודכן ל-<code>{channel}</code>.", reply_markup=await _settings_menu_markup()
         )
 
+    if action == 'set_freelimit':
+        try:
+            limit = int(text_in)
+            if limit < 0:
+                raise ValueError
+        except ValueError:
+            return await client.edit_message_caption(panel_chat, panel_msg, caption="❌ מספר לא תקין.", reply_markup=await _payments_menu_markup())
+        await db.set_config('free_daily_limit', limit)
+        return await client.edit_message_caption(
+            panel_chat, panel_msg, caption=f"✅ מכסת הקבצים החינמית עודכנה ל-<code>{limit}</code> ליום.", reply_markup=await _payments_menu_markup()
+        )
+
     if action == 'add_word':
         if not text_in:
             return await client.edit_message_caption(panel_chat, panel_msg, caption="❌ לא נשלחה מילה.", reply_markup=(await _words_menu_text_markup())[1])
@@ -465,9 +529,9 @@ async def admin_text_input(client, message):
             text = await _render_user_info(user_id)
             markup = await _user_actions_markup(user_id, 1)
             return await client.edit_message_caption(panel_chat, panel_msg, caption=text, reply_markup=markup)
-        keyboard = [[InlineKeyboardButton(f"👤 {m.get('first_name', 'Unknown')} — {m['_id']}", callback_data=f"adm_userview_{m['_id']}_1")] for m in matches]
-        keyboard.append([InlineKeyboardButton('חזרה ⋟', callback_data='adm_users_1', style=enums.ButtonStyle.PRIMARY)])
-        return await client.edit_message_caption(panel_chat, panel_msg, caption=f"🔎 נמצאו {len(matches)} תוצאות עבור '{text_in}':", reply_markup=InlineKeyboardMarkup(keyboard))
+        ADM_SEARCH[admin_id] = {'kind': 'user', 'term': text_in, 'matches': matches}
+        text, markup = _search_results_text_markup(admin_id, 1)
+        return await client.edit_message_caption(panel_chat, panel_msg, caption=text, reply_markup=markup)
 
     if action == 'find_group':
         if text_in.lstrip('-').isdigit():
@@ -492,9 +556,9 @@ async def admin_text_input(client, message):
             ban_info = await db.get_chat_ban_status(chat_id)
             markup = _group_actions_markup(chat_id, 1, bool(ban_info))
             return await client.edit_message_caption(panel_chat, panel_msg, caption=text, reply_markup=markup)
-        keyboard = [[InlineKeyboardButton(f"💬 {m.get('title', 'Unknown')} — {m['_id']}", callback_data=f"adm_groupview_{m['_id']}_1")] for m in matches]
-        keyboard.append([InlineKeyboardButton('חזרה ⋟', callback_data='adm_groups_1', style=enums.ButtonStyle.PRIMARY)])
-        return await client.edit_message_caption(panel_chat, panel_msg, caption=f"🔎 נמצאו {len(matches)} תוצאות עבור '{text_in}':", reply_markup=InlineKeyboardMarkup(keyboard))
+        ADM_SEARCH[admin_id] = {'kind': 'group', 'term': text_in, 'matches': matches}
+        text, markup = _search_results_text_markup(admin_id, 1)
+        return await client.edit_message_caption(panel_chat, panel_msg, caption=text, reply_markup=markup)
 
     if action in ('grant_time', 'grant_credits', 'remove_credits', 'send_dm'):
         target_user = state['target_user']
@@ -617,6 +681,18 @@ async def admin_callback(client, query):
     if data == "adm_set_channel":
         return await _start_input(query, "set_channel")
 
+    if data == "adm_payments_menu":
+        return await query.message.edit_caption("💰 <b>מערכת תשלומים</b>\n\nבחר הגדרה:", reply_markup=await _payments_menu_markup())
+
+    if data == "adm_toggle_payments":
+        from .pay import is_payments_enabled
+        enabled = await is_payments_enabled()
+        await db.set_config('payments_enabled', not enabled)
+        return await query.message.edit_caption("💰 <b>מערכת תשלומים</b>\n\nבחר הגדרה:", reply_markup=await _payments_menu_markup())
+
+    if data == "adm_set_freelimit":
+        return await _start_input(query, "set_freelimit")
+
     if data == "adm_words_menu":
         text, markup = await _words_menu_text_markup()
         return await query.message.edit_caption(text, reply_markup=markup)
@@ -629,6 +705,13 @@ async def admin_callback(client, query):
 
     if data == "adm_users_search":
         return await _start_input(query, "find_user")
+
+    if data.startswith("adm_searchpage_"):
+        page = int(data[len("adm_searchpage_"):])
+        text, markup = _search_results_text_markup(admin_id, page)
+        if not text:
+            return await query.answer("הפעולה פגה, חפש שוב.", show_alert=True)
+        return await query.message.edit_caption(text, reply_markup=markup)
 
     if data.startswith("adm_userview_"):
         rest = data[len("adm_userview_"):]
@@ -897,7 +980,7 @@ async def _start_input(query, action):
     info = PROMPTS[action]
     admin_id = query.from_user.id
     ADM_INPUT[admin_id] = {'action': action, 'panel_chat': query.message.chat.id, 'panel_msg': query.message.id}
-    back_targets = {'ban': 'adm_ban_menu', 'settings': 'adm_settings', 'words': 'adm_words_menu', 'users': 'adm_users_1', 'groups': 'adm_groups_1', 'channels': 'adm_channels_menu'}
+    back_targets = {'ban': 'adm_ban_menu', 'settings': 'adm_settings', 'words': 'adm_words_menu', 'users': 'adm_users_1', 'groups': 'adm_groups_1', 'channels': 'adm_channels_menu', 'payments': 'adm_payments_menu'}
     markup = InlineKeyboardMarkup([[InlineKeyboardButton('❌ ביטול', callback_data=back_targets[info['back']])]])
     text = f"✏️ <b>{info['label']}</b>\n\n{info['prompt']}"
     await query.message.edit_caption(text, reply_markup=markup)
