@@ -59,7 +59,7 @@ def _composer_markup(state):
 
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(f'🎯 יעד: {audience_label}', callback_data='bc2_audience')],
-        [InlineKeyboardButton(content_label, callback_data='noop'),
+        [InlineKeyboardButton(content_label, callback_data='bc2_content'),
          InlineKeyboardButton('👀 צפה', callback_data='bc2_view_content')],
         [InlineKeyboardButton(buttons_label, callback_data='bc2_buttons'), buttons_view_btn],
         [InlineKeyboardButton(pin_label, callback_data='bc2_toggle_pin', style=enums.ButtonStyle.SUCCESS if state['pin'] else enums.ButtonStyle.DANGER),
@@ -193,7 +193,7 @@ async def broadcast_callback(client, query):
     if not state:
         return await query.answer("הפעולה פגה, התחל מחדש.", show_alert=True)
 
-    if data not in ("bc2_buttons", "bc2_buttons_more"):
+    if data not in ("bc2_content", "bc2_buttons", "bc2_buttons_more"):
         state['step'] = None
 
     if data == "bc2_audience":
@@ -212,6 +212,15 @@ async def broadcast_callback(client, query):
 
     if data == "bc2_back":
         return await _refresh_composer(client, state)
+
+    if data == "bc2_content":
+        state['step'] = 'await_content'
+        text = "📨 <b>שלח עכשיו את ההודעה שתרצה לשדר.</b>"
+        if state['text']:
+            preview = state['text'] if len(state['text']) <= 250 else state['text'][:250] + "…"
+            text += f"\n\n<b>הטקסט הנוכחי:</b>\n<blockquote>{preview}</blockquote>"
+        markup = InlineKeyboardMarkup([[InlineKeyboardButton('🔙 חזרה לעריכה', callback_data='bc2_back')]])
+        return await query.message.edit_caption(text, reply_markup=markup)
 
     if data == "bc2_view_content":
         if not state['text']:

@@ -129,6 +129,7 @@ async def send_home_message(client, message, user=None, is_edit=False):
         [InlineKeyboardButton('〄 עזרה 〄', callback_data='help', style=enums.ButtonStyle.PRIMARY),
          InlineKeyboardButton('⍟ אודות ⍟', callback_data='about', style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('🔎 קניית חיפושים 🔎', callback_data='pay_menu', style=enums.ButtonStyle.SUCCESS)],
+        [InlineKeyboardButton('📨 פנייה לתמיכה', callback_data='support_start', style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('⇋ להוספה לקבוצה ⇋', url=f"http://t.me/{client.me.username}?startgroup&admin=delete_messages", style=enums.ButtonStyle.PRIMARY)]
     ]
     
