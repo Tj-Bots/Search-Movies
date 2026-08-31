@@ -194,9 +194,9 @@ async def callback_handler(client, query: CallbackQuery):
         user_mention = query.from_user.mention
         
         btns = [
-            [InlineKeyboardButton('הגדרות קבוצה', callback_data='help_settings', style=enums.ButtonStyle.SUCCESS), InlineKeyboardButton('זכויות יוצרים', callback_data='help_copyright', style=enums.ButtonStyle.SUCCESS)],
-            [InlineKeyboardButton('תוספות (Extra)', callback_data='help_extra', style=enums.ButtonStyle.SUCCESS), InlineKeyboardButton('מדריך שימוש', callback_data='help_guide', style=enums.ButtonStyle.SUCCESS)],
-            [InlineKeyboardButton('הורדה מטיקטוק', callback_data='help_d', style=enums.ButtonStyle.SUCCESS),           InlineKeyboardButton('סטטיסטיקות', callback_data='help_stats', style=enums.ButtonStyle.SUCCESS)],
+            [InlineKeyboardButton('הגדרות קבוצה', callback_data='help_settings', style=enums.ButtonStyle.PRIMARY), InlineKeyboardButton('זכויות יוצרים', callback_data='help_copyright', style=enums.ButtonStyle.PRIMARY)],
+            [InlineKeyboardButton('תוספות (Extra)', callback_data='help_extra', style=enums.ButtonStyle.PRIMARY), InlineKeyboardButton('מדריך שימוש', callback_data='help_guide', style=enums.ButtonStyle.PRIMARY)],
+            [InlineKeyboardButton('הורדה מטיקטוק', callback_data='help_d', style=enums.ButtonStyle.PRIMARY),           InlineKeyboardButton('סטטיסטיקות', callback_data='help_stats', style=enums.ButtonStyle.PRIMARY)],
             [InlineKeyboardButton('🆕 העלאת תמונה', callback_data='help_telegraph', style=enums.ButtonStyle.PRIMARY),           InlineKeyboardButton('🆕 כלים לוידאו', callback_data='help_exthumb', style=enums.ButtonStyle.PRIMARY)],
             [InlineKeyboardButton('🏠 בית 🏠', callback_data='home', style=enums.ButtonStyle.DANGER)],          
         ]

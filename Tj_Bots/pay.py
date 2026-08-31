@@ -15,7 +15,7 @@ TIME_PACKAGES = {
 }
 
 COUNT_PACKAGES = {
-    "count_1": {"stars": 15, "searches": 1, "label": "חיפוש בודד - 15 כוכבים"},
+    "count_1": {"stars": 10, "searches": 1, "label": "חיפוש בודד - 10 כוכבים"},
     "count_20": {"stars": 100, "searches": 20, "label": "20 חיפושים - 100 כוכבים"},
     "count_60": {"stars": 250, "searches": 60, "label": "60 חיפושים - 250 כוכבים"},
     "count_150": {"stars": 500, "searches": 150, "label": "150 חיפושים - 500 כוכבים"},
@@ -37,18 +37,19 @@ def _time_until_reset():
 
 
 async def check_quota(user_id):
-    if user_id in ADMINS:
-        return True
-
     quota = await db.get_search_quota(user_id)
-
-    if quota['unlimited_until'] > time.time():
-        return True
 
     today = _today_str()
     if quota['free_date'] != today:
         await db.reset_free_usage(user_id, today)
         quota['free_used'] = 0
+
+    if user_id in ADMINS:
+        await db.increment_free_usage(user_id)
+        return True
+
+    if quota['unlimited_until'] > time.time():
+        return True
 
     if quota['free_used'] < FREE_DAILY_SEARCHES:
         await db.increment_free_usage(user_id)
@@ -69,26 +70,42 @@ def out_of_quota_markup():
     return InlineKeyboardMarkup([[InlineKeyboardButton('🔎 קניית חיפושים', callback_data='pay_menu')]])
 
 
+ADMIN_INFINITY = '<tg-emoji emoji-id="5780517739756000213">♾</tg-emoji>'
+
+
 async def _status_block(user_id):
     quota = await db.get_search_quota(user_id)
     today = _today_str()
-    free_used = quota['free_used'] if quota['free_date'] == today else 0
-    free_left = max(FREE_DAILY_SEARCHES - free_used, 0)
+    used_today = quota['free_used'] if quota['free_date'] == today else 0
+
+    if user_id in ADMINS:
+        lines = [
+            "🆓 <b>חיפושים היום</b>",
+            f"בוצעו: <b>{used_today}</b> מתוך {ADMIN_INFINITY}",
+        ]
+        return "<blockquote>" + "\n".join(lines) + "</blockquote>"
+
+    free_left = max(FREE_DAILY_SEARCHES - used_today, 0)
     now = time.time()
 
     lines = [
-        f"🆓 חיפושים חינמיים: <b>{free_left}/{FREE_DAILY_SEARCHES}</b>",
+        "🆓 <b>חיפושים חינמיים</b>",
+        f"נוצלו: <b>{used_today}</b> מתוך <b>{FREE_DAILY_SEARCHES}</b> (נשארו: <b>{free_left}</b>)",
         f"⏳ מתאפס בעוד: <b>{_time_until_reset()}</b>",
-        f"💳 יתרת חיפושים בתשלום: <b>{quota['search_credits']}</b>",
+        "",
+        "💳 <b>חיפושים בתשלום</b>",
+        f"יתרה: <b>{quota['search_credits']}</b>",
+        "",
+        "⏰ <b>מנוי זמן ללא הגבלה</b>",
     ]
 
     if quota['unlimited_until'] > now:
         remaining = int(quota['unlimited_until'] - now)
         hours, remainder = divmod(remaining, 3600)
         minutes = remainder // 60
-        lines.append(f"⏰ מנוי זמן ללא הגבלה: פעיל עוד <b>{hours:02d}:{minutes:02d}</b>")
+        lines.append(f"פעיל עוד: <b>{hours:02d}:{minutes:02d}</b>")
     else:
-        lines.append("⏰ מנוי זמן ללא הגבלה: לא פעיל")
+        lines.append("לא פעיל")
 
     return "<blockquote>" + "\n".join(lines) + "</blockquote>"
 
