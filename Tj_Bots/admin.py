@@ -25,13 +25,13 @@ PROMPTS = {
 def _panel_markup():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton('📢 שידור הודעות', callback_data='bc_menu', style=enums.ButtonStyle.PRIMARY)],
-        [InlineKeyboardButton('🚫 ניהול חסימות', callback_data='adm_ban_menu', style=enums.ButtonStyle.PRIMARY),
+        [InlineKeyboardButton('🚫 ניהול חסימות', callback_data='adm_ban_menu', style=enums.ButtonStyle.DANGER),
          InlineKeyboardButton('👥 משתמשים', callback_data='adm_users_1', style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('⚙️ הגדרות מערכת', callback_data='adm_settings', style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('📊 סטטיסטיקות', callback_data='adm_stats', style=enums.ButtonStyle.PRIMARY),
          InlineKeyboardButton('🔥 חיפושים פופולריים', callback_data='adm_popular', style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('📈 מד עומס שרת', callback_data='adm_load', style=enums.ButtonStyle.PRIMARY),
-         InlineKeyboardButton('⭐ תומכים בכוכבים', callback_data='adm_stars', style=enums.ButtonStyle.PRIMARY)],
+         InlineKeyboardButton('⭐ תומכים בכוכבים', callback_data='adm_stars', style=enums.ButtonStyle.SUCCESS)],
         [InlineKeyboardButton('📡 ערוצי מקור', callback_data='adm_channels', style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('✘ סגור', callback_data='closea', style=enums.ButtonStyle.DANGER)],
     ])
@@ -39,10 +39,10 @@ def _panel_markup():
 
 def _ban_menu_markup():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton('🚫 חסימת משתמש', callback_data='adm_ban_ban_user'),
-         InlineKeyboardButton('✅ שחרור משתמש', callback_data='adm_ban_unban_user')],
-        [InlineKeyboardButton('🚫 חסימת קבוצה', callback_data='adm_ban_ban_chat'),
-         InlineKeyboardButton('✅ שחרור קבוצה', callback_data='adm_ban_unban_chat')],
+        [InlineKeyboardButton('🚫 חסימת משתמש', callback_data='adm_ban_ban_user', style=enums.ButtonStyle.DANGER),
+         InlineKeyboardButton('✅ שחרור משתמש', callback_data='adm_ban_unban_user', style=enums.ButtonStyle.SUCCESS)],
+        [InlineKeyboardButton('🚫 חסימת קבוצה', callback_data='adm_ban_ban_chat', style=enums.ButtonStyle.DANGER),
+         InlineKeyboardButton('✅ שחרור קבוצה', callback_data='adm_ban_unban_chat', style=enums.ButtonStyle.SUCCESS)],
         [InlineKeyboardButton('חזרה ⋟', callback_data='adm_home', style=enums.ButtonStyle.PRIMARY)],
     ])
 
@@ -51,12 +51,12 @@ async def _settings_menu_markup():
     locked = await db.get_config('bot_locked', False)
     auth_force = await db.get_config('auth_force', AUTH_CHANNEL_FORCE)
     lock_label = '🔒 הבוט נעול - לחץ לביטול' if locked else '🔓 הבוט פעיל - לחץ לנעילה'
-    auth_label = '✅ חיוב הרשמה: מופעל' if auth_force else '❌ חיוב הרשמה: כבוי'
+    auth_label = '🔒 חיוב הרשמה: מופעל' if auth_force else '🔓 חיוב הרשמה: כבוי'
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(lock_label, callback_data='adm_toggle_lock', style=enums.ButtonStyle.DANGER if locked else enums.ButtonStyle.SUCCESS)],
-        [InlineKeyboardButton(auth_label, callback_data='adm_toggle_auth')],
-        [InlineKeyboardButton('✏️ שינוי ערוץ חיוב הרשמה', callback_data='adm_set_channel')],
-        [InlineKeyboardButton('🚫 מילים חסומות בחיפוש', callback_data='adm_words_menu')],
+        [InlineKeyboardButton(auth_label, callback_data='adm_toggle_auth', style=enums.ButtonStyle.DANGER if auth_force else enums.ButtonStyle.SUCCESS)],
+        [InlineKeyboardButton('✏️ שינוי ערוץ חיוב הרשמה', callback_data='adm_set_channel', style=enums.ButtonStyle.PRIMARY)],
+        [InlineKeyboardButton('🚫 מילים חסומות בחיפוש', callback_data='adm_words_menu', style=enums.ButtonStyle.DANGER)],
         [InlineKeyboardButton('חזרה ⋟', callback_data='adm_home', style=enums.ButtonStyle.PRIMARY)],
     ])
 
@@ -66,8 +66,8 @@ async def _words_menu_text_markup():
     body = ", ".join(f"<code>{w}</code>" for w in words) if words else "אין מילים חסומות."
     text = f"🚫 <b>מילים חסומות בחיפוש</b>\n\n{body}"
     markup = InlineKeyboardMarkup([
-        [InlineKeyboardButton('➕ הוספת מילה', callback_data='adm_words_add'),
-         InlineKeyboardButton('➖ הסרת מילה', callback_data='adm_words_del')],
+        [InlineKeyboardButton('➕ הוספת מילה', callback_data='adm_words_add', style=enums.ButtonStyle.DANGER),
+         InlineKeyboardButton('➖ הסרת מילה', callback_data='adm_words_del', style=enums.ButtonStyle.SUCCESS)],
         [InlineKeyboardButton('חזרה ⋟', callback_data='adm_settings', style=enums.ButtonStyle.PRIMARY)],
     ])
     return text, markup
@@ -92,28 +92,44 @@ async def admin_command(client, message):
 
 # ---------- users browser ----------
 
+async def _render_user_info(user_id):
+    user = await db.find_user(user_id)
+    if not user:
+        return f"❌ המשתמש <code>{user_id}</code> לא נמצא במסד הנתונים."
+
+    quota = await db.get_search_quota(user_id)
+    ban_info = await db.get_ban_status(user_id)
+    ban_line = f"🚫 חסום (סיבה: {ban_info.get('reason')})" if ban_info else "✅ לא חסום"
+    unlimited = quota['unlimited_until'] > time.time()
+
+    return (
+        f"👤 <b>{user.get('first_name', 'Unknown')}</b> — <code>{user_id}</code>\n\n"
+        f"<blockquote>{ban_line}\n"
+        f"💳 יתרת חיפושים בתשלום: <b>{quota['search_credits']}</b>\n"
+        f"⏰ מנוי זמן ללא הגבלה: <b>{'פעיל' if unlimited else 'לא פעיל'}</b></blockquote>"
+    )
+
+
 async def _users_page_text_markup(page):
     users, total = await db.get_users_page(page, USERS_PER_PAGE)
     total_pages = max((total + USERS_PER_PAGE - 1) // USERS_PER_PAGE, 1)
 
-    if users:
-        body = "\n".join(f"• {u.get('first_name', 'Unknown')} — <code>{u['_id']}</code>" for u in users)
-    else:
-        body = "אין משתמשים."
+    text = f"👥 <b>משתמשים ({total})</b>\n\nבחר משתמש לצפייה בפרטים:"
 
-    text = f"👥 <b>משתמשים ({total})</b>\n\n{body}"
+    keyboard = [
+        [InlineKeyboardButton(f"👤 {u.get('first_name', 'Unknown')} — {u['_id']}", callback_data=f"adm_userview_{u['_id']}_{page}")]
+        for u in users
+    ] or [[InlineKeyboardButton('אין משתמשים', callback_data='noop')]]
 
     nav = []
     if page > 1:
         nav.append(InlineKeyboardButton('⬅️', callback_data=f'adm_users_{page - 1}'))
+    nav.append(InlineKeyboardButton(f'עמוד {page}/{total_pages}', callback_data='noop'))
     if page < total_pages:
         nav.append(InlineKeyboardButton('➡️', callback_data=f'adm_users_{page + 1}'))
+    keyboard.append(nav)
 
-    keyboard = []
-    if nav:
-        keyboard.append(nav)
-    keyboard.append([InlineKeyboardButton(f'עמוד {page}/{total_pages}', callback_data='noop')])
-    keyboard.append([InlineKeyboardButton('🔎 איתור לפי מזהה', callback_data='adm_users_search')])
+    keyboard.append([InlineKeyboardButton('🔎 איתור לפי מזהה', callback_data='adm_users_search', style=enums.ButtonStyle.PRIMARY)])
     keyboard.append([InlineKeyboardButton('חזרה ⋟', callback_data='adm_home', style=enums.ButtonStyle.PRIMARY)])
 
     return text, InlineKeyboardMarkup(keyboard)
@@ -195,21 +211,7 @@ async def admin_text_input(client, message):
         except ValueError:
             return await client.edit_message_caption(panel_chat, panel_msg, caption="❌ מזהה לא תקין.", reply_markup=_back_markup('adm_users_1'))
 
-        user = await db.find_user(user_id)
-        if not user:
-            return await client.edit_message_caption(panel_chat, panel_msg, caption=f"❌ המשתמש <code>{user_id}</code> לא נמצא במסד הנתונים.", reply_markup=_back_markup('adm_users_1'))
-
-        quota = await db.get_search_quota(user_id)
-        ban_info = await db.get_ban_status(user_id)
-        ban_line = f"🚫 חסום (סיבה: {ban_info.get('reason')})" if ban_info else "✅ לא חסום"
-        unlimited = quota['unlimited_until'] > time.time()
-
-        text = (
-            f"👤 <b>{user.get('first_name', 'Unknown')}</b> — <code>{user_id}</code>\n\n"
-            f"<blockquote>{ban_line}\n"
-            f"💳 יתרת חיפושים בתשלום: <b>{quota['search_credits']}</b>\n"
-            f"⏰ מנוי זמן ללא הגבלה: <b>{'פעיל' if unlimited else 'לא פעיל'}</b></blockquote>"
-        )
+        text = await _render_user_info(user_id)
         return await client.edit_message_caption(panel_chat, panel_msg, caption=text, reply_markup=_back_markup('adm_users_1'))
 
 
@@ -259,6 +261,17 @@ async def admin_callback(client, query):
 
     if data == "adm_users_search":
         return await _start_input(query, "find_user")
+
+    if data.startswith("adm_userview_"):
+        rest = data[len("adm_userview_"):]
+        user_id_str, _, back_page_str = rest.partition('_')
+        try:
+            user_id = int(user_id_str)
+        except ValueError:
+            return
+        back_page = int(back_page_str) if back_page_str.isdigit() else 1
+        text = await _render_user_info(user_id)
+        return await query.message.edit_caption(text, reply_markup=_back_markup(f'adm_users_{back_page}'))
 
     if data.startswith("adm_users_"):
         try:
