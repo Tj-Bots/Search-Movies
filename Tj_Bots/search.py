@@ -35,8 +35,8 @@ async def search_handler(client, message):
                 await db.increment_blocked_attempt(message.from_user.id)
             return await message.reply("🚫 **החיפוש הזה אינו מורשה.**", quote=True)
 
-    await db.log_search_query(query)
     results = await db.search_files(query)
+    await db.log_search_query(query, found=bool(results))
 
     if not results:
         try:

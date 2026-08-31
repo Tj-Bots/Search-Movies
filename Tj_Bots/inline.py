@@ -81,9 +81,9 @@ async def inline_search(client: Client, query: InlineQuery):
         await query.answer(results, cache_time=0, switch_pm_text="🔎 קניית קבצים", switch_pm_parameter="buy")
         return
 
-    await db.log_search_query(string)
     files = await db.search_files(string)
-    
+    await db.log_search_query(string, found=bool(files))
+
     if not files:
         results.append(
             InlineQueryResultArticle(

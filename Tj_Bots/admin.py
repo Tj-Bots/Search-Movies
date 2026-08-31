@@ -183,6 +183,28 @@ def _back_markup(target='adm_home'):
     return InlineKeyboardMarkup([[InlineKeyboardButton('חזרה ⋟', callback_data=target, style=enums.ButtonStyle.PRIMARY)]])
 
 
+async def _popular_text_markup():
+    rows = await db.get_popular_searches(20)
+    success, total = await db.get_search_stats_totals()
+
+    if rows:
+        lines = []
+        for i, r in enumerate(rows):
+            icon = '✅' if r.get('success_count', 0) > 0 else '❌'
+            lines.append(f"{i + 1}. <code>{r['_id']}</code> - {r['count']} חיפושים {icon}")
+        pct = (success / total * 100) if total else 0
+        body = "\n".join(lines) + f"\n\n📊 אחוזי הצלחה כוללים: {pct:.1f}% ({success}/{total})"
+        text = f"🔥 <b>{len(rows)} החיפושים הפופולריים ביותר:</b>\n\n{body}"
+    else:
+        text = "🔥 <b>חיפושים פופולריים</b>\n\nעדיין אין נתוני חיפושים."
+
+    markup = InlineKeyboardMarkup([
+        [InlineKeyboardButton('🗑 מחק היסטוריית חיפושים פופולריים', callback_data='adm_popular_clear_ask', style=enums.ButtonStyle.DANGER)],
+        [InlineKeyboardButton('חזרה ⋟', callback_data='adm_home', style=enums.ButtonStyle.PRIMARY)],
+    ])
+    return text, markup
+
+
 async def send_admin_panel(message, is_edit=False):
     text = "🛠 <b>פאנל ניהול</b>\n\nבחר פעולה:"
     if is_edit:
@@ -936,7 +958,11 @@ async def admin_callback(client, query):
     if data == "adm_stars":
         from .pay import build_purchase_stats_text
         text = await build_purchase_stats_text()
-        return await query.message.edit_caption(text, reply_markup=_back_markup())
+        markup = InlineKeyboardMarkup([
+            [InlineKeyboardButton('⚙️ הגדרות תשלומים', callback_data='adm_payments_menu', style=enums.ButtonStyle.PRIMARY)],
+            [InlineKeyboardButton('חזרה ⋟', callback_data='adm_home', style=enums.ButtonStyle.PRIMARY)],
+        ])
+        return await query.message.edit_caption(text, reply_markup=markup)
 
     if data == "adm_stats":
         from .stats import build_stats_text
@@ -944,12 +970,20 @@ async def admin_callback(client, query):
         return await query.message.edit_caption(text, reply_markup=_back_markup())
 
     if data == "adm_popular":
-        rows = await db.get_popular_searches(15)
-        if rows:
-            body = "\n".join(f"{i + 1}. <code>{r['_id']}</code> — {r['count']}" for i, r in enumerate(rows))
-        else:
-            body = "עדיין אין נתוני חיפושים."
-        return await query.message.edit_caption(f"🔥 <b>חיפושים פופולריים</b>\n\n{body}", reply_markup=_back_markup())
+        text, markup = await _popular_text_markup()
+        return await query.message.edit_caption(text, reply_markup=markup)
+
+    if data == "adm_popular_clear_ask":
+        async def _do_clear():
+            await db.clear_popular_searches()
+            text, markup = await _popular_text_markup()
+            await query.message.edit_caption(text, reply_markup=markup)
+
+        async def _cancel_clear():
+            text, markup = await _popular_text_markup()
+            await query.message.edit_caption(text, reply_markup=markup)
+
+        return await _ask_confirm(query, "למחוק את כל היסטוריית החיפושים הפופולריים? לא ניתן לשחזר.", _do_clear, _cancel_clear)
 
     if data == "adm_load":
         try:

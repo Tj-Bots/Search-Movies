@@ -244,17 +244,30 @@ class Database:
     async def remove_blocked_word(self, word):
         await self.bot_config.update_one({'_id': 'global'}, {'$pull': {'blocked_words': word}})
 
-    async def log_search_query(self, query):
+    async def log_search_query(self, query, found=True):
         key = query.strip().lower()
         if not key or self.search_log is None: return
         await self.search_log.update_one(
-            {'_id': key}, {'$inc': {'count': 1}, '$set': {'last': time.time()}}, upsert=True
+            {'_id': key},
+            {'$inc': {'count': 1, 'success_count': 1 if found else 0}, '$set': {'last': time.time()}},
+            upsert=True
         )
 
     async def get_popular_searches(self, limit=10):
         if self.search_log is None: return []
         cursor = self.search_log.find({}).sort('count', -1).limit(limit)
         return await cursor.to_list(length=limit)
+
+    async def get_search_stats_totals(self):
+        if self.search_log is None: return (0, 0)
+        pipeline = [{'$group': {'_id': None, 'total': {'$sum': '$count'}, 'success': {'$sum': '$success_count'}}}]
+        rows = await self.search_log.aggregate(pipeline).to_list(length=1)
+        if not rows: return (0, 0)
+        return (rows[0].get('success', 0), rows[0].get('total', 0))
+
+    async def clear_popular_searches(self):
+        if self.search_log is None: return
+        await self.search_log.delete_many({})
 
     async def get_users_page(self, page, per_page=10):
         skip = (page - 1) * per_page
