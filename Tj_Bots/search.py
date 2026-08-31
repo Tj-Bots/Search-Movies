@@ -26,7 +26,7 @@ async def search_handler(client, message):
     if message.from_user and not await check_quota(message.from_user.id):
         return await message.reply(
             denial_text(),
-            reply_markup=out_of_quota_markup(),
+            reply_markup=out_of_quota_markup(client.me.username),
             quote=True
         )
 

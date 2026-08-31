@@ -8,17 +8,21 @@ from database import db
 
 ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
 
+LIFETIME_SECONDS = 100 * 365 * 24 * 3600  # effectively forever
+LIFETIME_DISPLAY_THRESHOLD = 5 * 365 * 24 * 3600  # anything left above this shows as lifetime, not a countdown
+
 TIME_PACKAGES = {
-    "time_1h": {"stars": 100, "hours": 1, "label": "שעה ללא הגבלה - 100 כוכבים"},
-    "time_3h": {"stars": 250, "hours": 3, "label": "3 שעות ללא הגבלה - 250 כוכבים"},
-    "time_24h": {"stars": 500, "hours": 24, "label": "24 שעות ללא הגבלה - 500 כוכבים"},
+    "time_1h": {"stars": 50, "hours": 1, "label": "שעה ללא הגבלה - 50 כוכבים"},
+    "time_3h": {"stars": 125, "hours": 3, "label": "3 שעות ללא הגבלה - 125 כוכבים"},
+    "time_24h": {"stars": 250, "hours": 24, "label": "24 שעות ללא הגבלה - 250 כוכבים"},
+    "time_life": {"stars": 2000, "lifetime": True, "label": "לכל החיים ללא הגבלה - 2000 כוכבים"},
 }
 
 COUNT_PACKAGES = {
-    "count_1": {"stars": 10, "searches": 1, "label": "חיפוש בודד - 10 כוכבים"},
-    "count_20": {"stars": 100, "searches": 20, "label": "20 חיפושים - 100 כוכבים"},
-    "count_60": {"stars": 250, "searches": 60, "label": "60 חיפושים - 250 כוכבים"},
-    "count_150": {"stars": 500, "searches": 150, "label": "150 חיפושים - 500 כוכבים"},
+    "count_1": {"stars": 5, "searches": 1, "label": "חיפוש בודד - 5 כוכבים"},
+    "count_20": {"stars": 50, "searches": 20, "label": "20 חיפושים - 50 כוכבים"},
+    "count_60": {"stars": 125, "searches": 60, "label": "60 חיפושים - 125 כוכבים"},
+    "count_150": {"stars": 250, "searches": 150, "label": "150 חיפושים - 250 כוכבים"},
 }
 
 ALL_PACKAGES = {**TIME_PACKAGES, **COUNT_PACKAGES}
@@ -86,8 +90,8 @@ def denial_text():
     )
 
 
-def out_of_quota_markup():
-    return InlineKeyboardMarkup([[InlineKeyboardButton('🔎 קניית חיפושים', callback_data='pay_menu')]])
+def out_of_quota_markup(bot_username):
+    return InlineKeyboardMarkup([[InlineKeyboardButton('🔎 קניית חיפושים', url=f'https://t.me/{bot_username}?start=buy')]])
 
 
 ADMIN_INFINITY = '<tg-emoji emoji-id="5780517739756000213">♾</tg-emoji>'
@@ -119,9 +123,11 @@ async def _status_block(user_id):
         "⏰ <b>מנוי זמן ללא הגבלה</b>",
     ]
 
-    if quota['unlimited_until'] > now:
-        remaining = int(quota['unlimited_until'] - now)
-        hours, remainder = divmod(remaining, 3600)
+    remaining = quota['unlimited_until'] - now
+    if remaining > LIFETIME_DISPLAY_THRESHOLD:
+        lines.append(f"פעיל: {ADMIN_INFINITY} (לכל החיים)")
+    elif remaining > 0:
+        hours, remainder = divmod(int(remaining), 3600)
         minutes = remainder // 60
         lines.append(f"פעיל עוד: <b>{hours:02d}:{minutes:02d}</b>")
     else:
@@ -223,9 +229,14 @@ async def pay_successful(client, message):
 
     if key in TIME_PACKAGES:
         kind = "time"
-        value = package['hours']
-        await db.extend_unlimited(user_id, package['hours'] * 3600)
-        confirm = f"✅ **הרכישה בוצעה בהצלחה!**\nקיבלת חיפוש ללא הגבלה ל-{package['hours']} שעות."
+        if package.get('lifetime'):
+            value = "lifetime"
+            await db.extend_unlimited(user_id, LIFETIME_SECONDS)
+            confirm = "✅ **הרכישה בוצעה בהצלחה!**\nקיבלת חיפוש ללא הגבלה לכל החיים! 🎉"
+        else:
+            value = package['hours']
+            await db.extend_unlimited(user_id, package['hours'] * 3600)
+            confirm = f"✅ **הרכישה בוצעה בהצלחה!**\nקיבלת חיפוש ללא הגבלה ל-{package['hours']} שעות."
     else:
         kind = "count"
         value = package['searches']
