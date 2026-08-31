@@ -264,8 +264,37 @@ class Database:
     async def find_user(self, user_id):
         return await self.users.find_one({'_id': user_id})
 
+    async def search_users_by_name(self, name, limit=10):
+        regex = re.compile(re.escape(name), re.IGNORECASE)
+        cursor = self.users.find({'first_name': regex}).limit(limit)
+        return await cursor.to_list(length=limit)
+
+    async def get_groups_page(self, page, per_page=10):
+        skip = (page - 1) * per_page
+        cursor = self.groups.find({}).sort('_id', 1).skip(skip).limit(per_page)
+        groups = await cursor.to_list(length=per_page)
+        total = await self.groups.count_documents({})
+        return groups, total
+
+    async def find_group(self, chat_id):
+        return await self.groups.find_one({'_id': chat_id})
+
+    async def search_groups_by_name(self, name, limit=10):
+        regex = re.compile(re.escape(name), re.IGNORECASE)
+        cursor = self.groups.find({'title': regex}).limit(limit)
+        return await cursor.to_list(length=limit)
+
     async def increment_blocked_attempt(self, user_id):
         await self.users.update_one({'_id': user_id}, {'$inc': {'blocked_attempts': 1}}, upsert=True)
+
+    async def remove_search_credits(self, user_id, amount):
+        user = await self.users.find_one({'_id': user_id}) or {}
+        new_val = max(user.get('search_credits', 0) - amount, 0)
+        await self.users.update_one({'_id': user_id}, {'$set': {'search_credits': new_val}}, upsert=True)
+        return new_val
+
+    async def revoke_unlimited(self, user_id):
+        await self.users.update_one({'_id': user_id}, {'$set': {'unlimited_until': 0}}, upsert=True)
 
     async def log_user_search(self, user_id, query):
         if self.user_search_log is None: return
