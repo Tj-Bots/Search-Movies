@@ -26,7 +26,7 @@ COLOR_DOT = {'normal': '⚪️', 'blue': '🔵', 'green': '🟢', 'red': '🔴'}
 def _new_state(panel_chat, panel_msg):
     return {
         'panel_chat': panel_chat, 'panel_msg': panel_msg,
-        'audience': None, 'src_chat': None, 'src_msg': None,
+        'audience': None, 'text': None,
         'buttons': [], 'pin': False, 'mode': 'copy', 'step': None,
     }
 
@@ -46,17 +46,22 @@ def _build_buttons_markup(buttons):
 
 def _composer_markup(state):
     audience_label = AUDIENCE_LABELS.get(state['audience'], '❗ לא נבחר')
-    content_label = '📨 הודעה ✅' if state['src_msg'] else '📨 הודעה'
+    content_label = '📨 הודעה ✅' if state['text'] else '📨 הודעה'
     buttons_label = f"⌨️ כפתורים ✅{len(state['buttons'])}" if state['buttons'] else '⌨️ כפתורים'
     pin_label = '📌 נעיצה: ✓' if state['pin'] else '📌 נעיצה: ✘'
     mode_label = '🔁 Forward' if state['mode'] == 'forward' else '📋 Copy'
+
+    buttons_view_btn = (
+        InlineKeyboardButton('👀 צפה', callback_data='bc2_view_buttons')
+        if state['buttons'] else
+        InlineKeyboardButton('➖', callback_data='noop')
+    )
 
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(f'🎯 יעד: {audience_label}', callback_data='bc2_audience')],
         [InlineKeyboardButton(content_label, callback_data='noop'),
          InlineKeyboardButton('👀 צפה', callback_data='bc2_view_content')],
-        [InlineKeyboardButton(buttons_label, callback_data='bc2_buttons'),
-         InlineKeyboardButton('👀 צפה', callback_data='bc2_view_buttons')],
+        [InlineKeyboardButton(buttons_label, callback_data='bc2_buttons'), buttons_view_btn],
         [InlineKeyboardButton(pin_label, callback_data='bc2_toggle_pin', style=enums.ButtonStyle.SUCCESS if state['pin'] else enums.ButtonStyle.DANGER),
          InlineKeyboardButton(mode_label, callback_data='bc2_toggle_mode')],
         [InlineKeyboardButton('👀 תצוגה מקדימה מלאה', callback_data='bc2_full_preview')],
@@ -68,7 +73,7 @@ def _composer_markup(state):
 def _composer_text(state):
     text = (
         "📢 <b>עריכת שידור</b>\n\n"
-        "📝 שלח לי כל הודעה (טקסט / מדיה / Forward) בכל רגע - היא תיהפך לתוכן השידור.\n\n"
+        "📝 שלח לי כל הודעת טקסט בכל רגע - היא תיהפך לתוכן השידור.\n\n"
         "הגדר את שאר השדות ולחץ 'שדר עכשיו' כשסיימת."
     )
     if state['buttons'] and state['mode'] == 'forward':
@@ -109,14 +114,6 @@ async def _show_buttons_editor(client, state):
     await client.edit_message_caption(state['panel_chat'], state['panel_msg'], caption=text, reply_markup=_buttons_editor_markup(state))
 
 
-async def _clear_stash(client, state):
-    if state.get('src_msg'):
-        try:
-            await client.delete_messages(state['src_chat'], state['src_msg'])
-        except Exception:
-            pass
-
-
 @Client.on_message(filters.command("broadcast") & filters.user(ADMINS))
 async def broadcast_command(client, message):
     sent = await message.reply_photo(PHOTO_URL, caption="⏳", quote=True)
@@ -146,26 +143,15 @@ async def broadcast_input(client, message):
         state['step'] = None
         return await _show_buttons_editor(client, state)
 
-    # default (idle) - any message sent becomes the broadcast content
-    try:
-        stored = await message.copy(state['panel_chat'])
-    except Exception:
-        stored = None
+    # default (idle) - any text message sent becomes the broadcast content
+    if not message.text:
+        return await message.reply("⚠️ נתמך כרגע טקסט בלבד - שלח הודעת טקסט.", quote=True)
+
+    state['text'] = message.text
     try:
         await message.delete()
     except Exception:
         pass
-
-    if stored:
-        old_chat, old_msg = state.get('src_chat'), state.get('src_msg')
-        state['src_chat'] = stored.chat.id
-        state['src_msg'] = stored.id
-        if old_msg:
-            try:
-                await client.delete_messages(old_chat, old_msg)
-            except Exception:
-                pass
-
     await _refresh_composer(client, state)
 
 
@@ -192,17 +178,12 @@ async def broadcast_callback(client, query):
     admin_id = query.from_user.id
 
     if data == "bc_menu":
-        old = BC_STATE.get(admin_id)
-        if old:
-            await _clear_stash(client, old)
         state = _new_state(query.message.chat.id, query.message.id)
         BC_STATE[admin_id] = state
         return await _render_composer(query.message, state)
 
     if data == "bc_cancel":
-        state = BC_STATE.pop(admin_id, None)
-        if state:
-            await _clear_stash(client, state)
+        BC_STATE.pop(admin_id, None)
         from .admin import send_admin_panel
         return await send_admin_panel(query.message, is_edit=True)
 
@@ -228,10 +209,10 @@ async def broadcast_callback(client, query):
         return await _refresh_composer(client, state)
 
     if data == "bc2_view_content":
-        if not state['src_msg']:
+        if not state['text']:
             return await query.answer("❌ עדיין לא הוגדרה הודעה.", show_alert=True)
         try:
-            await client.copy_message(state['panel_chat'], state['src_chat'], state['src_msg'])
+            await client.send_message(state['panel_chat'], state['text'])
         except Exception as e:
             return await query.answer(f"❌ שגיאה: {e}", show_alert=True)
         return await query.answer()
@@ -244,7 +225,7 @@ async def broadcast_callback(client, query):
 
     if data == "bc2_view_buttons":
         if not state['buttons']:
-            return await query.answer("❌ עדיין לא הוגדרו כפתורים.", show_alert=True)
+            return await query.answer()
         return await _show_buttons_editor(client, state)
 
     if data == "bc2_buttons_more":
@@ -255,7 +236,7 @@ async def broadcast_callback(client, query):
 
     if data == "bc2_buttons_clear":
         state['buttons'] = []
-        return await _show_buttons_editor(client, state)
+        return await _refresh_composer(client, state)
 
     if data == "bc2_buttons_done":
         return await _refresh_composer(client, state)
@@ -276,14 +257,11 @@ async def broadcast_callback(client, query):
         return await _refresh_composer(client, state)
 
     if data == "bc2_full_preview":
-        if not state['src_msg']:
+        if not state['text']:
             return await query.answer("❌ יש להגדיר הודעה קודם.", show_alert=True)
         markup = _build_buttons_markup(state['buttons']) if state['mode'] == 'copy' else None
         try:
-            if state['mode'] == 'forward':
-                await client.forward_messages(state['panel_chat'], state['src_chat'], state['src_msg'])
-            else:
-                await client.copy_message(state['panel_chat'], state['src_chat'], state['src_msg'], reply_markup=markup)
+            await client.send_message(state['panel_chat'], state['text'], reply_markup=markup)
             return await query.answer("✅ תצוגה מקדימה נשלחה למעלה.")
         except Exception as e:
             return await query.answer(f"❌ שגיאה: {e}", show_alert=True)
@@ -291,7 +269,7 @@ async def broadcast_callback(client, query):
     if data == "bc2_send":
         if not state['audience']:
             return await query.answer("❌ יש לבחור יעד קודם.", show_alert=True)
-        if not state['src_msg']:
+        if not state['text']:
             return await query.answer("❌ יש להגדיר הודעה קודם.", show_alert=True)
         await query.answer()
         return await _run_broadcast(client, admin_id, state)
@@ -309,18 +287,24 @@ async def _run_broadcast(client, admin_id, state):
         async for g in await db.get_all_groups():
             targets.append(g['_id'])
 
+    total = len(targets)
     count = 0
     failed = 0
-    last_update = time.time()
+    start_time = time.time()
+    last_update = start_time
 
     await client.edit_message_caption(panel_chat, panel_msg, caption="🚀 **מתחיל שידור...**", reply_markup=None)
+
+    staged_msg = None
+    if state['mode'] == 'forward':
+        staged_msg = await client.send_message(panel_chat, state['text'])
 
     for target_id in targets:
         try:
             if state['mode'] == 'forward':
-                sent = await client.forward_messages(target_id, state['src_chat'], state['src_msg'])
+                sent = await client.forward_messages(target_id, panel_chat, staged_msg.id)
             else:
-                sent = await client.copy_message(target_id, state['src_chat'], state['src_msg'], reply_markup=buttons_markup)
+                sent = await client.send_message(target_id, state['text'], reply_markup=buttons_markup)
 
             if state['pin']:
                 try:
@@ -334,18 +318,43 @@ async def _run_broadcast(client, admin_id, state):
         except Exception:
             failed += 1
 
-        if time.time() - last_update >= 5:
+        if time.time() - last_update >= 3:
+            done = count + failed
+            elapsed = time.time() - start_time
+            pct = (done / total * 100) if total else 100
+            rate = done / elapsed if elapsed > 0 else 0
+            eta = int((total - done) / rate) if rate > 0 else 0
             try:
                 await client.edit_message_caption(
-                    panel_chat, panel_msg, caption=f"⏳ **משדר...**\n✅ נשלח: {count}\n🚫 נכשל: {failed}"
+                    panel_chat, panel_msg,
+                    caption=(
+                        f"⏳ **משדר... ({pct:.0f}%)**\n"
+                        f"📊 התקדמות: {done}/{total}\n"
+                        f"✅ נשלח: {count}\n"
+                        f"🚫 נכשל: {failed}\n"
+                        f"⏱ זמן משוער שנותר: {eta}s"
+                    )
                 )
                 last_update = time.time()
             except Exception:
                 pass
 
-    await _clear_stash(client, state)
+    if staged_msg:
+        try:
+            await client.delete_messages(panel_chat, staged_msg.id)
+        except Exception:
+            pass
+
     BC_STATE.pop(admin_id, None)
 
-    text = f"✅ **השידור הסתיים.**\n\n📫 נשלח ל: `{count}`\n🚫 נכשל/נחסם: `{failed}`"
+    total_time = int(time.time() - start_time)
+    mins, secs = divmod(total_time, 60)
+    text = (
+        f"✅ **השידור הסתיים.**\n\n"
+        f"📫 נשלח ל: `{count}`\n"
+        f"🚫 נכשל/נחסם: `{failed}`\n"
+        f"👥 סה'כ יעדים: `{total}`\n"
+        f"⏱ משך זמן: `{mins}m {secs}s`"
+    )
     markup = InlineKeyboardMarkup([[InlineKeyboardButton('חזרה לפאנל ⋟', callback_data='adm_home', style=enums.ButtonStyle.PRIMARY)]])
     await client.edit_message_caption(panel_chat, panel_msg, caption=text, reply_markup=markup)

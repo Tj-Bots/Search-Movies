@@ -22,6 +22,8 @@ PROMPTS = {
     'del_word': {'label': 'הסרת מילה חסומה', 'prompt': "שלח את המילה שברצונך להסיר מהחסימה.", 'back': 'words'},
     'find_user': {'label': 'איתור משתמש', 'prompt': "שלח מזהה (ID) או שם משתמש לחיפוש.", 'back': 'users'},
     'find_group': {'label': 'איתור קבוצה', 'prompt': "שלח מזהה (ID) או שם קבוצה לחיפוש.", 'back': 'groups'},
+    'watch_channel': {'label': 'הוספת ערוץ למעקב', 'prompt': "שלח את מזהה (ID) הערוץ להוספה למעקב.\nלדוגמה: <code>-1001234567890</code>", 'back': 'channels'},
+    'start_index': {'label': 'התחלת אינדוקס', 'prompt': "שלח קישור לערוץ (ואפשר טווח התחלה), בדיוק כמו בפקודת /index.\nלדוגמה: <code>https://t.me/c/1234/1000</code>\nאו: <code>https://t.me/c/1234/1000 - 500</code>", 'back': 'channels'},
 }
 
 USER_PROMPTS = {
@@ -52,9 +54,31 @@ def _panel_markup():
          InlineKeyboardButton('🔥 חיפושים פופולריים', callback_data='adm_popular', style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('📈 מד עומס שרת', callback_data='adm_load', style=enums.ButtonStyle.PRIMARY),
          InlineKeyboardButton('⭐ תומכים בכוכבים', callback_data='adm_stars', style=enums.ButtonStyle.SUCCESS)],
-        [InlineKeyboardButton('📡 ערוצי מקור', callback_data='adm_channels', style=enums.ButtonStyle.PRIMARY)],
+        [InlineKeyboardButton('📡 ערוצים', callback_data='adm_channels_menu', style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('✘ סגור', callback_data='closea', style=enums.ButtonStyle.DANGER)],
     ])
+
+
+def _channels_menu_markup():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton('➕ הוספת ערוץ למעקב', callback_data='adm_ch_add'),
+         InlineKeyboardButton('▶️ התחלת אינדוקס', callback_data='adm_ch_index')],
+        [InlineKeyboardButton('📋 ערוצים במעקב (לחיצה = הסרה)', callback_data='adm_ch_list')],
+        [InlineKeyboardButton('📊 סטטוס אינדוקס חי', callback_data='adm_ch_status')],
+        [InlineKeyboardButton('חזרה ⋟', callback_data='adm_home', style=enums.ButtonStyle.PRIMARY)],
+    ])
+
+
+async def _channels_list_text_markup():
+    channels = await db.get_watched_channels()
+    if not channels:
+        text = "📋 <b>ערוצים במעקב</b>\n\nאין ערוצים ברשימה."
+        keyboard = []
+    else:
+        text = "📋 <b>ערוצים במעקב</b>\n\nלחץ על ערוץ כדי להסיר אותו מהמעקב:"
+        keyboard = [[InlineKeyboardButton(f"📡 {c}", callback_data=f"adm_ch_rm_{c}")] for c in channels]
+    keyboard.append([InlineKeyboardButton('חזרה ⋟', callback_data='adm_channels_menu', style=enums.ButtonStyle.PRIMARY)])
+    return text, InlineKeyboardMarkup(keyboard)
 
 
 def _ban_menu_markup():
@@ -328,10 +352,31 @@ async def admin_text_input(client, message):
     panel_chat, panel_msg = state['panel_chat'], state['panel_msg']
     text_in = (message.text or "").strip()
 
+    if action == 'start_index':
+        from .index import start_indexing
+        await start_indexing(client, message, text_in)
+        try:
+            await message.delete()
+        except Exception:
+            pass
+        return await client.edit_message_caption(
+            panel_chat, panel_msg, caption="✅ האינדוקס הופעל (ראה הודעת סטטוס למעלה).", reply_markup=_channels_menu_markup()
+        )
+
     try:
         await message.delete()
     except Exception:
         pass
+
+    if action == 'watch_channel':
+        try:
+            chat_id = int(text_in)
+        except ValueError:
+            return await client.edit_message_caption(panel_chat, panel_msg, caption="❌ מזהה לא תקין.", reply_markup=_channels_menu_markup())
+        await db.add_watched_channel(chat_id)
+        return await client.edit_message_caption(
+            panel_chat, panel_msg, caption=f"✅ הערוץ <code>{chat_id}</code> נוסף למעקב.", reply_markup=_channels_menu_markup()
+        )
 
     if action in ('ban_user', 'unban_user', 'ban_chat', 'unban_chat'):
         parts = text_in.split(maxsplit=1)
@@ -668,11 +713,48 @@ async def admin_callback(client, query):
         text, markup = await _groups_page_text_markup(page)
         return await query.message.edit_caption(text, reply_markup=markup)
 
-    if data == "adm_channels":
-        channels = await db.get_watched_channels()
-        body = "\n".join(f"• <code>{c}</code>" for c in channels) if channels else "אין ערוצים ברשימת המעקב."
-        text = f"📡 <b>ערוצי מקור במעקב</b>\n\n{body}\n\nלהוספה/הסרה: <code>/newindex</code>, <code>/channels</code>."
-        return await query.message.edit_caption(text, reply_markup=_back_markup())
+    if data == "adm_channels_menu":
+        return await query.message.edit_caption("📡 <b>ערוצים</b>\n\nבחר פעולה:", reply_markup=_channels_menu_markup())
+
+    if data == "adm_ch_add":
+        return await _start_input(query, "watch_channel")
+
+    if data == "adm_ch_index":
+        return await _start_input(query, "start_index")
+
+    if data == "adm_ch_list":
+        text, markup = await _channels_list_text_markup()
+        return await query.message.edit_caption(text, reply_markup=markup)
+
+    if data.startswith("adm_ch_rm_"):
+        chat_id = int(data[len("adm_ch_rm_"):])
+        await db.remove_watched_channel(chat_id)
+        text, markup = await _channels_list_text_markup()
+        return await query.message.edit_caption(f"✅ הוסר: <code>{chat_id}</code>\n\n{text}", reply_markup=markup)
+
+    if data == "adm_ch_status":
+        from .index import INDEX_PROGRESS
+        running = {cid: p for cid, p in INDEX_PROGRESS.items() if p.get('running')}
+        if not running:
+            text = "📊 <b>סטטוס אינדוקס</b>\n\nאין אינדוקס פעיל כרגע."
+            keyboard = []
+        else:
+            blocks = []
+            keyboard = []
+            for cid, p in running.items():
+                elapsed = int(time.time() - p['started_at'])
+                span = max(p['end'] - p['start'], 1)
+                pct = ((p['current'] - p['start']) / span) * 100
+                blocks.append(
+                    f"📡 <b>{p['title']}</b>\n"
+                    f"התקדמות: {p['current']}/{p['end']} ({pct:.0f}%)\n"
+                    f"נשמרו: {p['saved']} | כפולים: {p['dups']}\n"
+                    f"זמן שחלף: {elapsed}s"
+                )
+                keyboard.append([InlineKeyboardButton(f"🛑 עצור: {p['title']}", callback_data=f"stop_idx_{cid}")])
+            text = "📊 <b>סטטוס אינדוקס חי</b>\n\n" + "\n\n".join(blocks)
+        keyboard.append([InlineKeyboardButton('חזרה ⋟', callback_data='adm_channels_menu', style=enums.ButtonStyle.PRIMARY)])
+        return await query.message.edit_caption(text, reply_markup=InlineKeyboardMarkup(keyboard))
 
     if data == "adm_stars":
         from .pay import build_purchase_stats_text
@@ -721,7 +803,7 @@ async def _start_input(query, action):
     info = PROMPTS[action]
     admin_id = query.from_user.id
     ADM_INPUT[admin_id] = {'action': action, 'panel_chat': query.message.chat.id, 'panel_msg': query.message.id}
-    back_targets = {'ban': 'adm_ban_menu', 'settings': 'adm_settings', 'words': 'adm_words_menu', 'users': 'adm_users_1', 'groups': 'adm_groups_1'}
+    back_targets = {'ban': 'adm_ban_menu', 'settings': 'adm_settings', 'words': 'adm_words_menu', 'users': 'adm_users_1', 'groups': 'adm_groups_1', 'channels': 'adm_channels_menu'}
     markup = InlineKeyboardMarkup([[InlineKeyboardButton('❌ ביטול', callback_data=back_targets[info['back']])]])
     text = f"✏️ <b>{info['label']}</b>\n\n{info['prompt']}"
     await query.message.edit_caption(text, reply_markup=markup)
