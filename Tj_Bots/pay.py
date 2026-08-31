@@ -1,23 +1,24 @@
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
-from pyrogram import Client, filters
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, LabeledPrice, CallbackQuery
-from config import ADMINS, FREE_DAILY_SEARCHES
+from pyrogram import Client, filters, enums
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto, LabeledPrice, CallbackQuery
+from config import ADMINS, FREE_DAILY_SEARCHES, PHOTO_URL
 from database import db
 
 ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
 
 TIME_PACKAGES = {
-    "time_1h": {"stars": 100, "hours": 1, "label": "100 כוכבים - שעה"},
-    "time_3h": {"stars": 250, "hours": 3, "label": "250 כוכבים - 3 שעות"},
-    "time_24h": {"stars": 500, "hours": 24, "label": "500 כוכבים - 24 שעות"},
+    "time_1h": {"stars": 100, "hours": 1, "label": "שעה ללא הגבלה - 100 כוכבים"},
+    "time_3h": {"stars": 250, "hours": 3, "label": "3 שעות ללא הגבלה - 250 כוכבים"},
+    "time_24h": {"stars": 500, "hours": 24, "label": "24 שעות ללא הגבלה - 500 כוכבים"},
 }
 
 COUNT_PACKAGES = {
-    "count_20": {"stars": 100, "searches": 20, "label": "100 כוכבים - 20 חיפושים"},
-    "count_60": {"stars": 250, "searches": 60, "label": "250 כוכבים - 60 חיפושים"},
-    "count_150": {"stars": 500, "searches": 150, "label": "500 כוכבים - 150 חיפושים"},
+    "count_1": {"stars": 15, "searches": 1, "label": "חיפוש בודד - 15 כוכבים"},
+    "count_20": {"stars": 100, "searches": 20, "label": "20 חיפושים - 100 כוכבים"},
+    "count_60": {"stars": 250, "searches": 60, "label": "60 חיפושים - 250 כוכבים"},
+    "count_150": {"stars": 500, "searches": 150, "label": "150 חיפושים - 500 כוכבים"},
 }
 
 ALL_PACKAGES = {**TIME_PACKAGES, **COUNT_PACKAGES}
@@ -25,6 +26,14 @@ ALL_PACKAGES = {**TIME_PACKAGES, **COUNT_PACKAGES}
 
 def _today_str():
     return datetime.now(ISRAEL_TZ).strftime("%Y-%m-%d")
+
+
+def _time_until_reset():
+    now = datetime.now(ISRAEL_TZ)
+    tomorrow = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    hours, remainder = divmod(int((tomorrow - now).total_seconds()), 3600)
+    minutes = remainder // 60
+    return f"{hours:02d}:{minutes:02d}"
 
 
 async def check_quota(user_id):
@@ -48,42 +57,73 @@ async def check_quota(user_id):
     return await db.use_search_credit(user_id)
 
 
+def denial_text():
+    return (
+        "🚫 <b>נגמרו לך כל החיפושים (חינמיים ובתשלום).</b>\n"
+        f"⏳ החיפושים החינמיים יתאפסו בעוד: <b>{_time_until_reset()}</b>\n"
+        "🔎 ניתן לרכוש חיפושים נוספים בכוכבים 👇"
+    )
+
+
 def out_of_quota_markup():
-    return InlineKeyboardMarkup([[InlineKeyboardButton('💎 קניית כוכבים', callback_data='pay_menu')]])
+    return InlineKeyboardMarkup([[InlineKeyboardButton('🔎 קניית חיפושים', callback_data='pay_menu')]])
+
+
+async def _status_block(user_id):
+    quota = await db.get_search_quota(user_id)
+    today = _today_str()
+    free_used = quota['free_used'] if quota['free_date'] == today else 0
+    free_left = max(FREE_DAILY_SEARCHES - free_used, 0)
+    now = time.time()
+
+    lines = [
+        f"🆓 חיפושים חינמיים: <b>{free_left}/{FREE_DAILY_SEARCHES}</b>",
+        f"⏳ מתאפס בעוד: <b>{_time_until_reset()}</b>",
+        f"💳 יתרת חיפושים בתשלום: <b>{quota['search_credits']}</b>",
+    ]
+
+    if quota['unlimited_until'] > now:
+        remaining = int(quota['unlimited_until'] - now)
+        hours, remainder = divmod(remaining, 3600)
+        minutes = remainder // 60
+        lines.append(f"⏰ מנוי זמן ללא הגבלה: פעיל עוד <b>{hours:02d}:{minutes:02d}</b>")
+    else:
+        lines.append("⏰ מנוי זמן ללא הגבלה: לא פעיל")
+
+    return "<blockquote>" + "\n".join(lines) + "</blockquote>"
 
 
 def _menu_markup():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton('⏰ חבילות זמן (חיפוש ללא הגבלה)', callback_data='pay_cat_time')],
-        [InlineKeyboardButton('🔍 חבילות חיפושים', callback_data='pay_cat_count')],
-        [InlineKeyboardButton('⇠ חזרה', callback_data='pay_close')],
+        [InlineKeyboardButton('⏰ חבילות זמן (חיפוש ללא הגבלה)', callback_data='pay_cat_time', style=enums.ButtonStyle.PRIMARY)],
+        [InlineKeyboardButton('🔍 חבילות חיפושים', callback_data='pay_cat_count', style=enums.ButtonStyle.PRIMARY)],
+        [InlineKeyboardButton('חזרה ⋟', callback_data='home', style=enums.ButtonStyle.PRIMARY),
+         InlineKeyboardButton('✘ סגור', callback_data='closea', style=enums.ButtonStyle.DANGER)],
     ])
 
 
-def _packages_markup(packages, back_to='pay_menu'):
-    keyboard = [[InlineKeyboardButton(f"{p['label']} ⭐", callback_data=f"pay_buy_{key}")] for key, p in packages.items()]
-    keyboard.append([InlineKeyboardButton('⇠ חזרה', callback_data=back_to)])
+def _packages_markup(packages):
+    keyboard = [[InlineKeyboardButton(f"{p['label']} ⭐", callback_data=f"pay_buy_{key}", style=enums.ButtonStyle.SUCCESS)] for key, p in packages.items()]
+    keyboard.append([InlineKeyboardButton('חזרה ⋟', callback_data='pay_menu', style=enums.ButtonStyle.PRIMARY)])
     return InlineKeyboardMarkup(keyboard)
 
 
-async def _edit(message, text, markup):
-    if message.photo:
-        await message.edit_caption(text, reply_markup=markup)
-    else:
-        await message.edit_text(text, reply_markup=markup)
+async def _edit_photo(message, text, markup):
+    await message.edit_media(InputMediaPhoto(PHOTO_URL, caption=text), reply_markup=markup)
 
 
-async def send_buy_menu(message, is_edit=False):
-    text = '⏰🔍 בחר חבילת כוכבים:'
+async def send_buy_menu(message, user_id, is_edit=False):
+    status = await _status_block(user_id)
+    text = f"🔎 <b>קניית חיפושים</b>\n\n{status}\n\nבחר את סוג החבילה שברצונך לרכוש:"
     if is_edit:
-        await _edit(message, text, _menu_markup())
+        await _edit_photo(message, text, _menu_markup())
     else:
-        await message.reply_text(text, reply_markup=_menu_markup(), quote=True)
+        await message.reply_photo(PHOTO_URL, caption=text, reply_markup=_menu_markup(), quote=True)
 
 
 @Client.on_message(filters.command("buy"))
 async def buy_command(client, message):
-    await send_buy_menu(message)
+    await send_buy_menu(message, message.from_user.id)
 
 
 @Client.on_callback_query(filters.regex(r"^pay_"))
@@ -92,20 +132,16 @@ async def pay_callback(client, query: CallbackQuery):
     user_id = query.from_user.id
 
     if data == "pay_menu":
-        return await send_buy_menu(query.message, is_edit=True)
-
-    if data == "pay_close":
-        try:
-            await query.message.delete()
-        except Exception:
-            pass
-        return
+        return await send_buy_menu(query.message, user_id, is_edit=True)
 
     if data == "pay_cat_time":
-        return await _edit(query.message, '⏰ בחר חבילת כוכבים:', _packages_markup(TIME_PACKAGES))
+        text = "⏰ <b>בחר חבילת זמן:</b>\n\nבתקופת החבילה תוכל לחפש ללא הגבלה."
+        return await _edit_photo(query.message, text, _packages_markup(TIME_PACKAGES))
 
     if data == "pay_cat_count":
-        return await _edit(query.message, '🔍 בחר חבילת כוכבים:', _packages_markup(COUNT_PACKAGES))
+        status = await _status_block(user_id)
+        text = f"🔍 <b>בחר חבילת חיפושים:</b>\n\n{status}"
+        return await _edit_photo(query.message, text, _packages_markup(COUNT_PACKAGES))
 
     if data.startswith("pay_buy_"):
         key = data[len("pay_buy_"):]
@@ -164,7 +200,7 @@ async def pay_successful(client, message):
 
     user_mention = message.from_user.mention
     admin_text = (
-        "💎 **רכישת כוכבים חדשה**\n\n"
+        "💎 **רכישת חיפושים חדשה**\n\n"
         f"👤 משתמש: {user_mention} (`{user_id}`)\n"
         f"📦 חבילה: {package['label']}\n"
         f"⭐ כוכבים: {stars}"

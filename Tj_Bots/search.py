@@ -4,7 +4,7 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQ
 from database import db
 from config import UPDATE_CHANNEL
 from .utils import get_readable_size, clean_filename
-from .pay import check_quota, out_of_quota_markup
+from .pay import check_quota, out_of_quota_markup, denial_text
 import asyncio
 
 @Client.on_message(filters.text & ~filters.command(["start", "index", "newindex", "settings", "broadcast", "broadcast_groups", "stats", "restart", "clean", "channels", "watch", "font", "share", "tts", "paste", "buy", "status"]))
@@ -25,7 +25,7 @@ async def search_handler(client, message):
 
     if message.from_user and not await check_quota(message.from_user.id):
         return await message.reply(
-            "🚫 **נגמרו לך החיפושים החינמיים להיום.**\nניתן לרכוש חיפושים נוספים בכוכבים 👇",
+            denial_text(),
             reply_markup=out_of_quota_markup(),
             quote=True
         )

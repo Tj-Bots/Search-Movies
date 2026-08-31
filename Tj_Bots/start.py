@@ -55,7 +55,7 @@ async def start_command(client, message):
 
             if file_db_id == "buy":
                 from .pay import send_buy_menu
-                return await send_buy_menu(message)
+                return await send_buy_menu(message, user_id)
 
             should_check = AUTH_CHANNEL_FORCE
             is_subbed = True
@@ -126,7 +126,7 @@ async def send_home_message(client, message, user=None, is_edit=False):
          InlineKeyboardButton('✇ ערוץ עדכונים ✇', url=f'https://t.me/{UPDATE_CHANNEL}', style=enums.ButtonStyle.SUCCESS)],
         [InlineKeyboardButton('〄 עזרה 〄', callback_data='help', style=enums.ButtonStyle.PRIMARY),
          InlineKeyboardButton('⍟ אודות ⍟', callback_data='about', style=enums.ButtonStyle.PRIMARY)],
-        [InlineKeyboardButton('💎 קניית כוכבים 💎', callback_data='pay_menu', style=enums.ButtonStyle.SUCCESS)],
+        [InlineKeyboardButton('🔎 קניית חיפושים 🔎', callback_data='pay_menu', style=enums.ButtonStyle.SUCCESS)],
         [InlineKeyboardButton('⇋ להוספה לקבוצה ⇋', url=f"http://t.me/{client.me.username}?startgroup&admin=delete_messages", style=enums.ButtonStyle.SUCCESS)]
     ]
     
