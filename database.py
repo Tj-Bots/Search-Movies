@@ -316,4 +316,13 @@ class Database:
         doc = await self.support_threads.find_one({'_id': f"{admin_chat_id}:{message_id}"})
         return doc['user_id'] if doc else None
 
+    async def save_continue_marker(self, user_id, message_id):
+        await self.support_threads.update_one(
+            {'_id': f"cont:{user_id}:{message_id}"}, {'$set': {'active': True, 'ts': time.time()}}, upsert=True
+        )
+
+    async def is_continue_marker(self, user_id, message_id):
+        doc = await self.support_threads.find_one({'_id': f"cont:{user_id}:{message_id}"})
+        return doc is not None
+
 db = Database()
