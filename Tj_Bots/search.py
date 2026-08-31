@@ -4,14 +4,15 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQ
 from database import db
 from config import UPDATE_CHANNEL
 from .utils import get_readable_size, clean_filename
+from .pay import check_quota, out_of_quota_markup
 import asyncio
 
-@Client.on_message(filters.text & ~filters.command(["start", "index", "newindex", "settings", "broadcast", "broadcast_groups", "stats", "restart", "clean", "channels", "watch", "font", "share", "tts", "paste"]))
+@Client.on_message(filters.text & ~filters.command(["start", "index", "newindex", "settings", "broadcast", "broadcast_groups", "stats", "restart", "clean", "channels", "watch", "font", "share", "tts", "paste", "buy", "status"]))
 async def search_handler(client, message):
     query = message.text
     if query.startswith("/"): return
     chat_id = message.chat.id
-    
+
     if message.chat.type in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]:
         await db.add_group(chat_id, message.chat.title)
         settings = await db.get_settings(chat_id)
@@ -21,6 +22,13 @@ async def search_handler(client, message):
         settings = await db.get_settings(chat_id)
 
     if len(query) < 2: return
+
+    if message.from_user and not await check_quota(message.from_user.id):
+        return await message.reply(
+            "🚫 **נגמרו לך החיפושים החינמיים להיום.**\nניתן לרכוש חיפושים נוספים בכוכבים 👇",
+            reply_markup=out_of_quota_markup(),
+            quote=True
+        )
 
     results = await db.search_files(query)
     

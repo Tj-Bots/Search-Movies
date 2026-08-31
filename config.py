@@ -20,3 +20,5 @@ REQUEST_GROUP = "https://t.me/searchgram_group"
 PHOTO_URL = "https://i.ibb.co/BK2j0c7p/x.jpg"
 
 AUTH_CHANNEL_FORCE = os.environ.get("AUTH_CHANNEL_FORCE", "False").lower() == "true"
+
+FREE_DAILY_SEARCHES = int(os.environ.get("FREE_DAILY_SEARCHES", "5"))

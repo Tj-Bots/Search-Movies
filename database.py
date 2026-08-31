@@ -1,5 +1,6 @@
 import motor.motor_asyncio
 import re
+import time
 from config import MONGO_URI, DB_NAME
 
 class Database:
@@ -13,6 +14,7 @@ class Database:
         self.watched = None
         self.banned = None
         self.banned_chats = None
+        self.purchases = None
 
     async def init_database(self, bot):
         me = await bot.get_me()
@@ -24,6 +26,7 @@ class Database:
         self.watched = self.db[f"{prefix}_watched"]
         self.banned = self.db[f"{prefix}_banned"]
         self.banned_chats = self.db[f"{prefix}_banned_chats"]
+        self.purchases = self.db[f"{prefix}_purchases"]
 
     async def add_user(self, user_id, first_name):
         if self.users is None: return False
@@ -150,5 +153,54 @@ class Database:
     async def get_chat_ban_status(self, chat_id):
         if self.banned_chats is None: return None
         return await self.banned_chats.find_one({'_id': chat_id})
+
+    async def get_search_quota(self, user_id):
+        user = await self.users.find_one({'_id': user_id}) or {}
+        return {
+            'free_used': user.get('free_used', 0),
+            'free_date': user.get('free_date', ''),
+            'search_credits': user.get('search_credits', 0),
+            'unlimited_until': user.get('unlimited_until', 0),
+        }
+
+    async def reset_free_usage(self, user_id, today):
+        await self.users.update_one({'_id': user_id}, {'$set': {'free_used': 0, 'free_date': today}}, upsert=True)
+
+    async def increment_free_usage(self, user_id):
+        await self.users.update_one({'_id': user_id}, {'$inc': {'free_used': 1}}, upsert=True)
+
+    async def use_search_credit(self, user_id):
+        result = await self.users.find_one_and_update(
+            {'_id': user_id, 'search_credits': {'$gt': 0}},
+            {'$inc': {'search_credits': -1}}
+        )
+        return result is not None
+
+    async def add_search_credits(self, user_id, amount):
+        await self.users.update_one({'_id': user_id}, {'$inc': {'search_credits': amount}}, upsert=True)
+
+    async def extend_unlimited(self, user_id, seconds):
+        quota = await self.get_search_quota(user_id)
+        base = quota['unlimited_until'] if quota['unlimited_until'] > time.time() else time.time()
+        until = base + seconds
+        await self.users.update_one({'_id': user_id}, {'$set': {'unlimited_until': until}}, upsert=True)
+        return until
+
+    async def log_purchase(self, user_id, package_key, kind, stars, value):
+        if self.purchases is None: return
+        await self.purchases.insert_one({
+            'user_id': user_id, 'package_key': package_key, 'kind': kind,
+            'stars': stars, 'value': value, 'date': time.time()
+        })
+
+    async def get_purchase_stats(self):
+        if self.purchases is None: return {'total_stars': 0, 'total_count': 0, 'packages': {}}
+        pipeline = [{'$group': {'_id': '$package_key', 'stars': {'$sum': '$stars'}, 'count': {'$sum': 1}}}]
+        rows = await self.purchases.aggregate(pipeline).to_list(length=100)
+        return {
+            'total_stars': sum(r['stars'] for r in rows),
+            'total_count': sum(r['count'] for r in rows),
+            'packages': {r['_id']: {'stars': r['stars'], 'count': r['count']} for r in rows},
+        }
 
 db = Database()

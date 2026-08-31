@@ -11,6 +11,7 @@ from pyrogram.types import (
 )
 from database import db
 from config import PHOTO_URL
+from .pay import check_quota
 
 @Client.on_inline_query()
 async def inline_search(client: Client, query: InlineQuery):
@@ -33,6 +34,21 @@ async def inline_search(client: Client, query: InlineQuery):
             )
         )
         await query.answer(results, cache_time=0)
+        return
+
+    if not await check_quota(query.from_user.id):
+        results.append(
+            InlineQueryResultArticle(
+                id=str(uuid.uuid4()),
+                title="🚫 נגמרו החיפושים החינמיים",
+                description="ניתן לרכוש חיפושים נוספים בכוכבים",
+                input_message_content=InputTextMessageContent(
+                    "🚫 **נגמרו לך החיפושים החינמיים להיום.** ניתן לרכוש חיפושים נוספים בכוכבים."
+                ),
+                thumb_url=PHOTO_URL
+            )
+        )
+        await query.answer(results, cache_time=0, switch_pm_text="💎 קניית כוכבים", switch_pm_parameter="buy")
         return
 
     files = await db.search_files(string)

@@ -44,6 +44,7 @@ d - הורדת סרטון מטיקטוק.
 mediainfo - מידע על קובץ מmediainfo.
 telegraph - העלאת תמונה לשרתי i.ibb.co.
 extract_thumbnail - חילוץ תמונה ממוזערת ממדיה.
+buy - רכישת חיפושים נוספים בכוכבים טלגרם.
 ```
 
 # ***⌨️ פקודות למנהלים***
@@ -60,6 +61,7 @@ unban - [ID] = שחרור משתמש. [Admin only]
 ban_chat - [ID] = חסימת קבוצה. [Admin only]
 unban_chat - [ID] = שחרור קבוצה. [Admin only]
 leave - [ID] = יציאה מקבוצה (ללא חסימה). [Admin only]
+status - סטטוס רכישות כוכבים. [Admin only]
 ```
 _כדי להוסיף את הפקודות לבוט שלכם יש לשלוח את הפקודה `/setcommands` ל-[@botfather](https://t.me/botfather)._
 
@@ -83,6 +85,7 @@ _כדי להוסיף את הפקודות לבוט שלכם יש לשלוח את 
 | `REQUEST_GROUP` | ❌ | קישור לקבוצת הבקשות/תמיכה |
 | `PHOTO_URL` | ❌ | קישור ישיר לתמונה (שישמש כקאבר לבוט) |
 | `AUTH_CHANNEL_FORCE` | ❌ | חיוב הרשמה לערוץ עדכונים. False או True |
+| `FREE_DAILY_SEARCHES` | ❌ | כמות חיפושים חינמיים ליום (מתאפס בחצות שעון ישראל). ברירת מחדל: 5 |
 
 </details>
 

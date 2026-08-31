@@ -52,7 +52,11 @@ async def start_command(client, message):
         
         if len(message.command) > 1:
             file_db_id = message.command[1]
-            
+
+            if file_db_id == "buy":
+                from .pay import send_buy_menu
+                return await send_buy_menu(message)
+
             should_check = AUTH_CHANNEL_FORCE
             is_subbed = True
             
@@ -120,8 +124,9 @@ async def send_home_message(client, message, user=None, is_edit=False):
         [InlineKeyboardButton("🔍 חיפוש באינליין 🔎", switch_inline_query_current_chat="", style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('✇ קבוצת בקשות ✇', url=REQUEST_GROUP, style=enums.ButtonStyle.SUCCESS), 
          InlineKeyboardButton('✇ ערוץ עדכונים ✇', url=f'https://t.me/{UPDATE_CHANNEL}', style=enums.ButtonStyle.SUCCESS)],
-        [InlineKeyboardButton('〄 עזרה 〄', callback_data='help', style=enums.ButtonStyle.PRIMARY), 
+        [InlineKeyboardButton('〄 עזרה 〄', callback_data='help', style=enums.ButtonStyle.PRIMARY),
          InlineKeyboardButton('⍟ אודות ⍟', callback_data='about', style=enums.ButtonStyle.PRIMARY)],
+        [InlineKeyboardButton('💎 קניית כוכבים 💎', callback_data='pay_menu', style=enums.ButtonStyle.SUCCESS)],
         [InlineKeyboardButton('⇋ להוספה לקבוצה ⇋', url=f"http://t.me/{client.me.username}?startgroup&admin=delete_messages", style=enums.ButtonStyle.SUCCESS)]
     ]
     
@@ -243,7 +248,8 @@ async def callback_handler(client, query: CallbackQuery):
             "<blockquote>• <code>/clean</code> - אשף ניקוי נתונים.\n"
             "• <code>/broadcast</code> [-f] - שידור למנויים.\n"
             "• <code>/broadcast_groups</code> - שידור לקבוצות.\n"
-            "• <code>/restart</code> - הפעלה מחדש.</blockquote>"
+            "• <code>/restart</code> - הפעלה מחדש.\n"
+            "• <code>/status</code> - סטטוס רכישות כוכבים.</blockquote>"
         )
         await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('חזרה ⋟', callback_data='help', style=enums.ButtonStyle.PRIMARY)]]))
 
