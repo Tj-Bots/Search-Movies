@@ -2,7 +2,7 @@
 from pyrogram import Client, filters, enums
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from database import db
-from config import UPDATE_CHANNEL
+from config import UPDATE_CHANNEL, ADMINS
 from .utils import get_readable_size, clean_filename
 from .pay import check_quota, consume_search, out_of_quota_markup, denial_text
 import asyncio
@@ -23,6 +23,17 @@ async def search_handler(client, message):
 
     if len(query) < 2: return
 
+    is_admin_user = bool(message.from_user) and message.from_user.id in ADMINS
+
+    if not is_admin_user:
+        if await db.get_config('bot_locked', False):
+            return await message.reply("🔒 **הבוט נמצא כרגע במצב תחזוקה.** נסה שוב בקרוב.", quote=True)
+
+        blocked_words = await db.get_blocked_words()
+        lowered = query.lower()
+        if any(w in lowered for w in blocked_words):
+            return await message.reply("🚫 **החיפוש הזה אינו מורשה.**", quote=True)
+
     if message.from_user and not await check_quota(message.from_user.id):
         return await message.reply(
             denial_text(),
@@ -30,6 +41,7 @@ async def search_handler(client, message):
             quote=True
         )
 
+    await db.log_search_query(query)
     results = await db.search_files(query)
 
     if not results:

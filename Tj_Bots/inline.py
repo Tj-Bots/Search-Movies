@@ -10,7 +10,7 @@ from pyrogram.types import (
     InlineKeyboardMarkup
 )
 from database import db
-from config import PHOTO_URL
+from config import PHOTO_URL, ADMINS
 from .pay import check_quota, consume_search, denial_text
 
 @Client.on_inline_query()
@@ -36,6 +36,37 @@ async def inline_search(client: Client, query: InlineQuery):
         await query.answer(results, cache_time=0)
         return
 
+    is_admin_user = query.from_user.id in ADMINS
+
+    if not is_admin_user:
+        if await db.get_config('bot_locked', False):
+            results.append(
+                InlineQueryResultArticle(
+                    id=str(uuid.uuid4()),
+                    title="🔒 הבוט במצב תחזוקה",
+                    description="נסה שוב בקרוב",
+                    input_message_content=InputTextMessageContent("🔒 **הבוט נמצא כרגע במצב תחזוקה.** נסה שוב בקרוב."),
+                    thumb_url=PHOTO_URL
+                )
+            )
+            await query.answer(results, cache_time=0)
+            return
+
+        blocked_words = await db.get_blocked_words()
+        lowered = string.lower()
+        if any(w in lowered for w in blocked_words):
+            results.append(
+                InlineQueryResultArticle(
+                    id=str(uuid.uuid4()),
+                    title="🚫 חיפוש לא מורשה",
+                    description="החיפוש הזה אינו מורשה",
+                    input_message_content=InputTextMessageContent("🚫 **החיפוש הזה אינו מורשה.**"),
+                    thumb_url=PHOTO_URL
+                )
+            )
+            await query.answer(results, cache_time=0)
+            return
+
     if not await check_quota(query.from_user.id):
         results.append(
             InlineQueryResultArticle(
@@ -49,6 +80,7 @@ async def inline_search(client: Client, query: InlineQuery):
         await query.answer(results, cache_time=0, switch_pm_text="🔎 קניית חיפושים", switch_pm_parameter="buy")
         return
 
+    await db.log_search_query(string)
     files = await db.search_files(string)
     
     if not files:

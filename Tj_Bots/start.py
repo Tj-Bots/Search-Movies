@@ -57,17 +57,18 @@ async def start_command(client, message):
                 from .pay import send_buy_menu
                 return await send_buy_menu(message, user_id)
 
-            should_check = AUTH_CHANNEL_FORCE
+            should_check = await db.get_config('auth_force', AUTH_CHANNEL_FORCE)
+            update_channel = await db.get_config('update_channel', UPDATE_CHANNEL)
             is_subbed = True
-            
+
             if should_check:
                 try:
-                    await client.get_chat_member(UPDATE_CHANNEL, user_id)
+                    await client.get_chat_member(update_channel, user_id)
                 except:
                     is_subbed = False
 
             if not is_subbed:
-                btn = [[InlineKeyboardButton('📣 להרשמה לערוץ', url=f'https://t.me/{UPDATE_CHANNEL}')],
+                btn = [[InlineKeyboardButton('📣 להרשמה לערוץ', url=f'https://t.me/{update_channel}')],
                        [InlineKeyboardButton('↻ נסה שוב', callback_data=f"checksub_{file_db_id}")]]
                 
                 return await message.reply_text(
@@ -119,11 +120,12 @@ async def send_home_message(client, message, user=None, is_edit=False):
     bot_name = client.me.first_name
     bot_username = client.me.username
     bot_mention = f"[{bot_name}](https://t.me/{bot_username})"
-    
+    update_channel = await db.get_config('update_channel', UPDATE_CHANNEL)
+
     buttons = [
         [InlineKeyboardButton("🔍 חיפוש באינליין 🔎", switch_inline_query_current_chat="", style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('✇ קבוצת בקשות ✇', url=REQUEST_GROUP, style=enums.ButtonStyle.PRIMARY),
-         InlineKeyboardButton('✇ ערוץ עדכונים ✇', url=f'https://t.me/{UPDATE_CHANNEL}', style=enums.ButtonStyle.PRIMARY)],
+         InlineKeyboardButton('✇ ערוץ עדכונים ✇', url=f'https://t.me/{update_channel}', style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('〄 עזרה 〄', callback_data='help', style=enums.ButtonStyle.PRIMARY),
          InlineKeyboardButton('⍟ אודות ⍟', callback_data='about', style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('🔎 קניית חיפושים 🔎', callback_data='pay_menu', style=enums.ButtonStyle.SUCCESS)],
@@ -149,13 +151,14 @@ async def callback_handler(client, query: CallbackQuery):
 
     if data.startswith("checksub_"):
         file_db_id = data.split("_")[1]
-        
-        should_check = AUTH_CHANNEL_FORCE
+
+        should_check = await db.get_config('auth_force', AUTH_CHANNEL_FORCE)
+        update_channel = await db.get_config('update_channel', UPDATE_CHANNEL)
         is_subbed = True
-        
+
         if should_check:
             try:
-                await client.get_chat_member(UPDATE_CHANNEL, user_id)
+                await client.get_chat_member(update_channel, user_id)
             except:
                 is_subbed = False
 
@@ -235,7 +238,7 @@ async def callback_handler(client, query: CallbackQuery):
         txt = (
             "<b><u>לוח בקרה למנהלים:</u></b>\n\n"
             "<b>◉ פאנל ניהול:</b>\n"
-            "<blockquote>• <code>/admin</code> - פאנל ניהול מלא: שידור הודעות, חסימות, ערוצי מקור, תומכים בכוכבים וסטטיסטיקות.</blockquote>\n\n"
+            "<blockquote>• <code>/admin</code> - פאנל ניהול מלא: שידור הודעות, חסימות, משתמשים, הגדרות מערכת (נעילה/חיוב הרשמה/מילים חסומות), סטטיסטיקות, חיפושים פופולריים, מד עומס שרת ותומכים בכוכבים.</blockquote>\n\n"
             "<b>◉ ניהול תוכן:</b>\n"
             "<blockquote>• <code>/index</code> [link] - [start] - הוספת קבצים מערוץ (לפי טווח).\n"
             "• <code>/newindex</code> [ID] - מעקב אחרי תוכן חדש בערוץ.\n"
@@ -347,12 +350,13 @@ async def callback_handler(client, query: CallbackQuery):
         bot_name = client.me.first_name
         bot_username = client.me.username
         bot_mention = f"[{bot_name}](https://t.me/{bot_username})"
+        update_channel = await db.get_config('update_channel', UPDATE_CHANNEL)
         txt = (
             "<blockquote><b>╔════❰ 𝗔𝗯𝗼𝘂𝘁 𝗧𝗵𝗲 𝗕𝗼𝘁 ❱═❍⊱❁۪۪</b>\n"
             "<b>║╭━━━━━━━━━━━━━━━➣</b>\n"
             f"<b>║┣⪼ 🤖 ʙᴏᴛ : {bot_mention}</b>\n"
             "<b>║┣⪼ 👦 ᴄʀᴇᴀᴛᴏʀ : @BOSS1480</b>\n"
-            f"<b>║┣⪼ 🤖 ᴜᴘᴅᴀᴛᴇ : <a href='https://t.me/{UPDATE_CHANNEL}'>Update Channel</a></b>\n"
+            f"<b>║┣⪼ 🤖 ᴜᴘᴅᴀᴛᴇ : <a href='https://t.me/{update_channel}'>Update Channel</a></b>\n"
             "<b>║┣⪼ 🗣️ ʟᴀɴɢᴜᴀɢᴇ : [Python](https://www.python.org/)</b>\n"
             "<b>║┣⪼ 📚 Lɪʙʀᴀʀʏ : [Pyrogram](https://docs.pyrogram.org/)</b>\n"
             "<b>║┣⪼ &lt;/&gt; Sᴏᴜʀᴄᴇ: : [GitHub](https://github.com/TJ-Bots/Search-Movies)</b>\n"

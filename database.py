@@ -15,6 +15,8 @@ class Database:
         self.banned = None
         self.banned_chats = None
         self.purchases = None
+        self.bot_config = None
+        self.search_log = None
 
     async def init_database(self, bot):
         me = await bot.get_me()
@@ -27,6 +29,8 @@ class Database:
         self.banned = self.db[f"{prefix}_banned"]
         self.banned_chats = self.db[f"{prefix}_banned_chats"]
         self.purchases = self.db[f"{prefix}_purchases"]
+        self.bot_config = self.db[f"{prefix}_bot_config"]
+        self.search_log = self.db[f"{prefix}_search_log"]
 
     async def add_user(self, user_id, first_name):
         if self.users is None: return False
@@ -202,5 +206,46 @@ class Database:
             'total_count': sum(r['count'] for r in rows),
             'packages': {r['_id']: {'stars': r['stars'], 'count': r['count']} for r in rows},
         }
+
+    async def get_config(self, key, default=None):
+        if self.bot_config is None: return default
+        doc = await self.bot_config.find_one({'_id': 'global'})
+        if not doc: return default
+        return doc.get(key, default)
+
+    async def set_config(self, key, value):
+        await self.bot_config.update_one({'_id': 'global'}, {'$set': {key: value}}, upsert=True)
+
+    async def get_blocked_words(self):
+        doc = await self.bot_config.find_one({'_id': 'global'}) or {}
+        return doc.get('blocked_words', [])
+
+    async def add_blocked_word(self, word):
+        await self.bot_config.update_one({'_id': 'global'}, {'$addToSet': {'blocked_words': word}}, upsert=True)
+
+    async def remove_blocked_word(self, word):
+        await self.bot_config.update_one({'_id': 'global'}, {'$pull': {'blocked_words': word}})
+
+    async def log_search_query(self, query):
+        key = query.strip().lower()
+        if not key or self.search_log is None: return
+        await self.search_log.update_one(
+            {'_id': key}, {'$inc': {'count': 1}, '$set': {'last': time.time()}}, upsert=True
+        )
+
+    async def get_popular_searches(self, limit=10):
+        if self.search_log is None: return []
+        cursor = self.search_log.find({}).sort('count', -1).limit(limit)
+        return await cursor.to_list(length=limit)
+
+    async def get_users_page(self, page, per_page=10):
+        skip = (page - 1) * per_page
+        cursor = self.users.find({}).sort('_id', 1).skip(skip).limit(per_page)
+        users = await cursor.to_list(length=per_page)
+        total = await self.users.count_documents({})
+        return users, total
+
+    async def find_user(self, user_id):
+        return await self.users.find_one({'_id': user_id})
 
 db = Database()
