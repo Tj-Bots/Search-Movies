@@ -234,6 +234,8 @@ async def callback_handler(client, query: CallbackQuery):
     elif data == "help_admin":
         txt = (
             "<b><u>לוח בקרה למנהלים:</u></b>\n\n"
+            "<b>◉ פאנל ניהול:</b>\n"
+            "<blockquote>• <code>/admin</code> - פאנל ניהול מלא: שידור הודעות, חסימות, ערוצי מקור, תומכים בכוכבים וסטטיסטיקות.</blockquote>\n\n"
             "<b>◉ ניהול תוכן:</b>\n"
             "<blockquote>• <code>/index</code> [link] - [start] - הוספת קבצים מערוץ (לפי טווח).\n"
             "• <code>/newindex</code> [ID] - מעקב אחרי תוכן חדש בערוץ.\n"
@@ -246,8 +248,7 @@ async def callback_handler(client, query: CallbackQuery):
             "• <code>/leave</code> [ID] - יציאה מקבוצה (ללא חסימה).</blockquote>\n\n"
             "<b>◉ מערכת:</b>\n"
             "<blockquote>• <code>/clean</code> - אשף ניקוי נתונים.\n"
-            "• <code>/broadcast</code> [-f] - שידור למנויים.\n"
-            "• <code>/broadcast_groups</code> - שידור לקבוצות.\n"
+            "• <code>/broadcast</code> - שידור הודעות (למשתמשים/קבוצות/הכל).\n"
             "• <code>/restart</code> - הפעלה מחדש.\n"
             "• <code>/status</code> - סטטוס רכישות כוכבים.</blockquote>"
         )

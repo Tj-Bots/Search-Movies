@@ -7,7 +7,7 @@ from .utils import get_readable_size, clean_filename
 from .pay import check_quota, consume_search, out_of_quota_markup, denial_text
 import asyncio
 
-@Client.on_message(filters.text & ~filters.command(["start", "index", "newindex", "settings", "broadcast", "broadcast_groups", "stats", "restart", "clean", "channels", "watch", "font", "share", "tts", "paste", "buy", "status"]))
+@Client.on_message(filters.text & ~filters.command(["start", "index", "newindex", "settings", "broadcast", "stats", "restart", "clean", "channels", "watch", "font", "share", "tts", "paste", "buy", "status", "admin"]))
 async def search_handler(client, message):
     query = message.text
     if query.startswith("/"): return

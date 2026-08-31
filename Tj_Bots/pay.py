@@ -260,8 +260,7 @@ async def pay_successful(client, message):
             pass
 
 
-@Client.on_message(filters.command("status") & filters.user(ADMINS))
-async def status_command(client, message):
+async def build_purchase_stats_text():
     stats = await db.get_purchase_stats()
 
     lines = [
@@ -278,4 +277,10 @@ async def status_command(client, message):
     else:
         lines.append("עדיין לא בוצעו רכישות.")
 
-    await message.reply_text("\n".join(lines), quote=True)
+    return "\n".join(lines)
+
+
+@Client.on_message(filters.command("status") & filters.user(ADMINS))
+async def status_command(client, message):
+    text = await build_purchase_stats_text()
+    await message.reply_text(text, quote=True)

@@ -49,12 +49,12 @@ buy - רכישת חיפושים נוספים בכוכבים טלגרם.
 
 # ***⌨️ פקודות למנהלים***
 ```
+admin - פאנל ניהול מלא (שידור, חסימות, ערוצים, סטטיסטיקות). [Admin only]
 index - [link] - [start] =אינדקס לערוץ. מוסיף את כל הקבצים שיש בערוץ למסד נתונים. [Admin only]
 newindex - [id] = מוסיף כל קובץ חדש שנשלח בערוץ. (מוסיף רק הודעות חדשות) [Admin only]
 channels - ניהול ערוצים במעקב. [Admin only]
 clean - מחיקת כל הקבצים מהאינדקס. או כל המשתמשים שנשמרו. [Admin only]
-broadcast - שידור הודעה לכל המשתמשים. [Admin only]
-broadcast_groups - שידור הודעה לכל הקבוצות. [Admin only]
+broadcast - שידור הודעה (למשתמשים/קבוצות/הכל, עם תמיכה בכפתורים). [Admin only]
 restart - הפעלה מחדש לבוט. [Admin only]
 ban - [id] = חסימת משתמש. [Admin only]
 unban - [ID] = שחרור משתמש. [Admin only]
