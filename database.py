@@ -281,6 +281,9 @@ class Database:
     async def find_group(self, chat_id):
         return await self.groups.find_one({'_id': chat_id})
 
+    async def remove_group(self, chat_id):
+        await self.groups.delete_one({'_id': chat_id})
+
     async def search_groups_by_name(self, name, limit=10):
         regex = re.compile(re.escape(name), re.IGNORECASE)
         cursor = self.groups.find({'title': regex}).limit(limit)

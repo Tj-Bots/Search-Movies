@@ -19,10 +19,10 @@ TIME_PACKAGES = {
 }
 
 COUNT_PACKAGES = {
-    "count_1": {"stars": 5, "searches": 1, "label": "חיפוש בודד - 5 כוכבים"},
-    "count_20": {"stars": 50, "searches": 20, "label": "20 חיפושים - 50 כוכבים"},
-    "count_60": {"stars": 125, "searches": 60, "label": "60 חיפושים - 125 כוכבים"},
-    "count_150": {"stars": 250, "searches": 150, "label": "150 חיפושים - 250 כוכבים"},
+    "count_1": {"stars": 5, "searches": 1, "label": "קובץ בודד - 5 כוכבים"},
+    "count_20": {"stars": 50, "searches": 20, "label": "20 קבצים - 50 כוכבים"},
+    "count_60": {"stars": 125, "searches": 60, "label": "60 קבצים - 125 כוכבים"},
+    "count_150": {"stars": 250, "searches": 150, "label": "150 קבצים - 250 כוכבים"},
 }
 
 ALL_PACKAGES = {**TIME_PACKAGES, **COUNT_PACKAGES}
@@ -84,14 +84,14 @@ async def consume_search(user_id):
 
 def denial_text():
     return (
-        "🚫 <b>נגמרו לך כל החיפושים (חינמיים ובתשלום).</b>\n"
-        f"⏳ החיפושים החינמיים יתאפסו בעוד: <b>{_time_until_reset()}</b>\n"
-        "🔎 ניתן לרכוש חיפושים נוספים בכוכבים 👇"
+        "🚫 <b>נגמרו לך כל הקבצים (חינמיים ובתשלום).</b>\n"
+        f"⏳ הקבצים החינמיים יתאפסו בעוד: <b>{_time_until_reset()}</b>\n"
+        "🔎 ניתן לרכוש קבצים נוספים בכוכבים 👇"
     )
 
 
 def out_of_quota_markup(bot_username):
-    return InlineKeyboardMarkup([[InlineKeyboardButton('🔎 קניית חיפושים', url=f'https://t.me/{bot_username}?start=buy')]])
+    return InlineKeyboardMarkup([[InlineKeyboardButton('🔎 קניית קבצים', url=f'https://t.me/{bot_username}?start=buy')]])
 
 
 ADMIN_INFINITY = '<tg-emoji emoji-id="5780517739756000213">♾</tg-emoji>'
@@ -104,8 +104,8 @@ async def _status_block(user_id):
 
     if user_id in ADMINS:
         lines = [
-            "🆓 <b>חיפושים היום</b>",
-            f"בוצעו: <b>{used_today}</b> מתוך {ADMIN_INFINITY}",
+            "🆓 <b>קבצים היום</b>",
+            f"התקבלו: <b>{used_today}</b> מתוך {ADMIN_INFINITY}",
         ]
         return "<blockquote>" + "\n".join(lines) + "</blockquote>"
 
@@ -113,11 +113,11 @@ async def _status_block(user_id):
     now = time.time()
 
     lines = [
-        "🆓 <b>חיפושים חינמיים</b>",
+        "🆓 <b>קבצים חינמיים</b>",
         f"נוצלו: <b>{used_today}</b> מתוך <b>{FREE_DAILY_SEARCHES}</b> (נשארו: <b>{free_left}</b>)",
         f"⏳ מתאפס בעוד: <b>{_time_until_reset()}</b>",
         "",
-        "💳 <b>חיפושים בתשלום</b>",
+        "💳 <b>קבצים בתשלום</b>",
         f"יתרה: <b>{quota['search_credits']}</b>",
         "",
         "⏰ <b>מנוי זמן ללא הגבלה</b>",
@@ -138,8 +138,8 @@ async def _status_block(user_id):
 
 def _menu_markup():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton('⏰ חבילות זמן (חיפוש ללא הגבלה)', callback_data='pay_cat_time', style=enums.ButtonStyle.PRIMARY)],
-        [InlineKeyboardButton('🔍 חבילות חיפושים', callback_data='pay_cat_count', style=enums.ButtonStyle.PRIMARY)],
+        [InlineKeyboardButton('⏰ חבילות זמן (קבצים ללא הגבלה)', callback_data='pay_cat_time', style=enums.ButtonStyle.PRIMARY)],
+        [InlineKeyboardButton('🔍 חבילות קבצים', callback_data='pay_cat_count', style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('חזרה ⋟', callback_data='home', style=enums.ButtonStyle.PRIMARY),
          InlineKeyboardButton('✘ סגור', callback_data='closea', style=enums.ButtonStyle.DANGER)],
     ])
@@ -157,7 +157,7 @@ async def _edit_photo(message, text, markup):
 
 async def send_buy_menu(message, user_id, is_edit=False):
     status = await _status_block(user_id)
-    text = f"🔎 <b>קניית חיפושים</b>\n\n{status}\n\nבחר את סוג החבילה שברצונך לרכוש:"
+    text = f"🔎 <b>קניית קבצים</b>\n\n{status}\n\nבחר את סוג החבילה שברצונך לרכוש:"
     if is_edit:
         await _edit_photo(message, text, _menu_markup())
     else:
@@ -178,12 +178,12 @@ async def pay_callback(client, query: CallbackQuery):
         return await send_buy_menu(query.message, user_id, is_edit=True)
 
     if data == "pay_cat_time":
-        text = "⏰ <b>בחר חבילת זמן:</b>\n\nבתקופת החבילה תוכל לחפש ללא הגבלה."
+        text = "⏰ <b>בחר חבילת זמן:</b>\n\nבתקופת החבילה תוכל לקבל קבצים ללא הגבלה."
         return await _edit_photo(query.message, text, _packages_markup(TIME_PACKAGES))
 
     if data == "pay_cat_count":
         status = await _status_block(user_id)
-        text = f"🔍 <b>בחר חבילת חיפושים:</b>\n\n{status}"
+        text = f"🔍 <b>בחר חבילת קבצים:</b>\n\n{status}"
         return await _edit_photo(query.message, text, _packages_markup(COUNT_PACKAGES))
 
     if data.startswith("pay_buy_"):
@@ -232,23 +232,23 @@ async def pay_successful(client, message):
         if package.get('lifetime'):
             value = "lifetime"
             await db.extend_unlimited(user_id, LIFETIME_SECONDS)
-            confirm = "✅ **הרכישה בוצעה בהצלחה!**\nקיבלת חיפוש ללא הגבלה לכל החיים! 🎉"
+            confirm = "✅ **הרכישה בוצעה בהצלחה!**\nקיבלת קבצים ללא הגבלה לכל החיים! 🎉"
         else:
             value = package['hours']
             await db.extend_unlimited(user_id, package['hours'] * 3600)
-            confirm = f"✅ **הרכישה בוצעה בהצלחה!**\nקיבלת חיפוש ללא הגבלה ל-{package['hours']} שעות."
+            confirm = f"✅ **הרכישה בוצעה בהצלחה!**\nקיבלת קבצים ללא הגבלה ל-{package['hours']} שעות."
     else:
         kind = "count"
         value = package['searches']
         await db.add_search_credits(user_id, package['searches'])
-        confirm = f"✅ **הרכישה בוצעה בהצלחה!**\nקיבלת {package['searches']} חיפושים נוספים."
+        confirm = f"✅ **הרכישה בוצעה בהצלחה!**\nקיבלת {package['searches']} קבצים נוספים."
 
     await db.log_purchase(user_id, key, kind, stars, value)
     await message.reply_text(confirm, quote=True)
 
     user_mention = message.from_user.mention
     admin_text = (
-        "💎 **רכישת חיפושים חדשה**\n\n"
+        "💎 **רכישת קבצים חדשה**\n\n"
         f"👤 משתמש: {user_mention} (`{user_id}`)\n"
         f"📦 חבילה: {package['label']}\n"
         f"⭐ כוכבים: {stars}"

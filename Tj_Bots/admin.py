@@ -28,8 +28,8 @@ PROMPTS = {
 
 USER_PROMPTS = {
     'grant_time': {'label': 'הענקת זמן ללא הגבלה', 'prompt': "שלח כמה שעות להעניק (מספר בלבד).\nלדוגמה: <code>24</code>"},
-    'grant_credits': {'label': 'הענקת חיפושים', 'prompt': "שלח כמה חיפושים להעניק (מספר בלבד).\nלדוגמה: <code>20</code>"},
-    'remove_credits': {'label': 'הסרת חיפושים מהבנק', 'prompt': "שלח כמה חיפושים להסיר (מספר בלבד)."},
+    'grant_credits': {'label': 'הענקת קבצים', 'prompt': "שלח כמה קבצים להעניק (מספר בלבד).\nלדוגמה: <code>20</code>"},
+    'remove_credits': {'label': 'הסרת קבצים מהבנק', 'prompt': "שלח כמה קבצים להסיר (מספר בלבד)."},
     'send_dm': {'label': 'שליחת הודעה פרטית', 'prompt': "שלח את תוכן ההודעה שתישלח למשתמש."},
 }
 
@@ -211,8 +211,8 @@ async def _render_user_info(user_id):
         f"🪪 מזהה (ID): <code>{user_id}</code>\n\n"
         "<blockquote>"
         f"⏰ מנוי זמן ללא הגבלה: <b>{unlimited_line}</b>\n"
-        f"💳 יתרת חיפושים (בנק): <b>{quota['search_credits']}</b>\n"
-        f"🆓 חיפושים חינמיים היום: <b>{free_used}/{FREE_DAILY_SEARCHES}</b>\n"
+        f"💳 יתרת קבצים (בנק): <b>{quota['search_credits']}</b>\n"
+        f"🆓 קבצים חינמיים היום: <b>{free_used}/{FREE_DAILY_SEARCHES}</b>\n"
         f"🚦 סטטוס חסימה: {ban_line}\n"
         f"⚠️ כמות עבירות (חיפושים אסורים): <b>{user.get('blocked_attempts', 0)}</b>"
         "</blockquote>"
@@ -227,7 +227,7 @@ async def _user_actions_markup(user_id, page):
         InlineKeyboardButton('🚫 חסום משתמש', callback_data=f'adm_ban2_{user_id}_{page}', style=enums.ButtonStyle.DANGER)
     )
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton('🎛 ניהול חיפושים', callback_data=f'adm_searchmgmt_{user_id}_{page}', style=enums.ButtonStyle.SUCCESS)],
+        [InlineKeyboardButton('🎛 ניהול קבצים', callback_data=f'adm_searchmgmt_{user_id}_{page}', style=enums.ButtonStyle.SUCCESS)],
         [InlineKeyboardButton('📚 היסטוריית חיפושים', callback_data=f'adm_history_{user_id}_{page}')],
         [InlineKeyboardButton('✉️ שלח הודעה פרטית', callback_data=f'adm_dm_{user_id}_{page}')],
         [ban_btn],
@@ -238,10 +238,10 @@ async def _user_actions_markup(user_id, page):
 def _search_mgmt_markup(user_id, page):
     return InlineKeyboardMarkup([
         [InlineKeyboardButton('💎 הענק זמן ללא הגבלה', callback_data=f'adm_grantt_{user_id}_{page}', style=enums.ButtonStyle.SUCCESS)],
-        [InlineKeyboardButton('🔍 הענק חיפושים', callback_data=f'adm_grantc_{user_id}_{page}', style=enums.ButtonStyle.SUCCESS)],
-        [InlineKeyboardButton('➖ הסר חיפושים מהבנק', callback_data=f'adm_revokec_{user_id}_{page}', style=enums.ButtonStyle.DANGER)],
+        [InlineKeyboardButton('🔍 הענק קבצים', callback_data=f'adm_grantc_{user_id}_{page}', style=enums.ButtonStyle.SUCCESS)],
+        [InlineKeyboardButton('➖ הסר קבצים מהבנק', callback_data=f'adm_revokec_{user_id}_{page}', style=enums.ButtonStyle.DANGER)],
         [InlineKeyboardButton('❌ ביטול מנוי זמן ללא הגבלה', callback_data=f'adm_revoket_{user_id}_{page}', style=enums.ButtonStyle.DANGER)],
-        [InlineKeyboardButton('🔄 איפוס חיפושים חינמיים היום', callback_data=f'adm_resetfree_{user_id}_{page}')],
+        [InlineKeyboardButton('🔄 איפוס קבצים חינמיים היום', callback_data=f'adm_resetfree_{user_id}_{page}')],
         [InlineKeyboardButton('חזרה לפרטי משתמש ⋟', callback_data=f'adm_userview_{user_id}_{page}', style=enums.ButtonStyle.PRIMARY)],
     ])
 
@@ -509,22 +509,22 @@ async def admin_text_input(client, message):
                 return await client.edit_message_caption(panel_chat, panel_msg, caption="❌ מספר לא תקין.", reply_markup=_back_markup(back_target))
             await db.extend_unlimited(target_user, hours * 3600)
             note = f"✅ הוענקו {hours:g} שעות ללא הגבלה."
-            await _notify_user(client, target_user, f"🎁 <b>קיבלת מתנה מהמנהל!</b>\nהוענקו לך {hours:g} שעות חיפוש ללא הגבלה.")
+            await _notify_user(client, target_user, f"🎁 <b>קיבלת מתנה מהמנהל!</b>\nהוענקו לך {hours:g} שעות עם קבצים ללא הגבלה.")
         elif action == 'grant_credits':
             try:
                 amount = int(text_in)
             except ValueError:
                 return await client.edit_message_caption(panel_chat, panel_msg, caption="❌ מספר לא תקין.", reply_markup=_back_markup(back_target))
             await db.add_search_credits(target_user, amount)
-            note = f"✅ הוענקו {amount} חיפושים."
-            await _notify_user(client, target_user, f"🎁 <b>קיבלת מתנה מהמנהל!</b>\nהוענקו לך {amount} חיפושים נוספים.")
+            note = f"✅ הוענקו {amount} קבצים."
+            await _notify_user(client, target_user, f"🎁 <b>קיבלת מתנה מהמנהל!</b>\nהוענקו לך {amount} קבצים נוספים.")
         elif action == 'remove_credits':
             try:
                 amount = int(text_in)
             except ValueError:
                 return await client.edit_message_caption(panel_chat, panel_msg, caption="❌ מספר לא תקין.", reply_markup=_back_markup(back_target))
             new_val = await db.remove_search_credits(target_user, amount)
-            note = f"✅ הוסרו עד {amount} חיפושים (יתרה כעת: {new_val})."
+            note = f"✅ הוסרו עד {amount} קבצים (יתרה כעת: {new_val})."
         else:
             try:
                 await client.send_message(target_user, text_in)
@@ -535,7 +535,7 @@ async def admin_text_input(client, message):
         info_text = await _render_user_info(target_user)
         if return_to == 'mgmt':
             markup = _search_mgmt_markup(target_user, back_page)
-            caption = f"🎛 <b>ניהול חיפושים</b>\n\n{note}\n\n{info_text}"
+            caption = f"🎛 <b>ניהול קבצים</b>\n\n{note}\n\n{info_text}"
         else:
             markup = await _user_actions_markup(target_user, back_page)
             caption = f"{note}\n\n{info_text}"
@@ -683,7 +683,7 @@ async def admin_callback(client, query):
         user_id, page = int(user_id_str), int(page_str) if page_str.isdigit() else 1
         text = await _render_user_info(user_id)
         markup = _search_mgmt_markup(user_id, page)
-        return await query.message.edit_caption(f"🎛 <b>ניהול חיפושים</b>\n\n{text}", reply_markup=markup)
+        return await query.message.edit_caption(f"🎛 <b>ניהול קבצים</b>\n\n{text}", reply_markup=markup)
 
     if data.startswith("adm_grantt_"):
         user_id_str, _, page_str = data[len("adm_grantt_"):].partition('_')
@@ -713,7 +713,7 @@ async def admin_callback(client, query):
         await db.reset_free_usage(user_id, today)
         text = await _render_user_info(user_id)
         markup = _search_mgmt_markup(user_id, page)
-        return await query.message.edit_caption(f"✅ החיפושים החינמיים היום אופסו.\n\n{text}", reply_markup=markup)
+        return await query.message.edit_caption(f"✅ הקבצים החינמיים היום אופסו.\n\n{text}", reply_markup=markup)
 
     if data.startswith("adm_dm_"):
         user_id_str, _, page_str = data[len("adm_dm_"):].partition('_')
@@ -778,7 +778,8 @@ async def admin_callback(client, query):
         async def _do_gleave():
             try:
                 await client.leave_chat(chat_id)
-                note = "✅ הבוט עזב את הקבוצה."
+                await db.remove_group(chat_id)
+                note = "✅ הבוט עזב את הקבוצה והוסרה מהרשימה."
             except Exception as e:
                 note = f"❌ שגיאה: {e}"
             text, markup = await _groups_page_text_markup(page)

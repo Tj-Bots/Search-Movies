@@ -72,13 +72,13 @@ async def inline_search(client: Client, query: InlineQuery):
         results.append(
             InlineQueryResultArticle(
                 id=str(uuid.uuid4()),
-                title="🚫 נגמרו החיפושים",
-                description="ניתן לרכוש חיפושים נוספים בכוכבים",
+                title="🚫 נגמרו הקבצים",
+                description="ניתן לרכוש קבצים נוספים בכוכבים",
                 input_message_content=InputTextMessageContent(denial_text()),
                 thumb_url=PHOTO_URL
             )
         )
-        await query.answer(results, cache_time=0, switch_pm_text="🔎 קניית חיפושים", switch_pm_parameter="buy")
+        await query.answer(results, cache_time=0, switch_pm_text="🔎 קניית קבצים", switch_pm_parameter="buy")
         return
 
     await db.log_search_query(string)

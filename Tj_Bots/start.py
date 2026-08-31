@@ -5,6 +5,7 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQ
 from config import UPDATE_CHANNEL, REQUEST_GROUP, PHOTO_URL, ADMINS, LOG_CHANNEL, AUTH_CHANNEL_FORCE
 from database import db
 from .utils import get_readable_size
+from .pay import check_quota, consume_search, out_of_quota_markup, denial_text
 
 async def send_file_with_fallback(client, chat_id, file_data, reply_to_id=None):
     try:
@@ -79,8 +80,16 @@ async def start_command(client, message):
 
             file_data = await db.get_file(file_db_id)
             if file_data:
+                if not await check_quota(user_id):
+                    return await message.reply_text(
+                        denial_text(),
+                        reply_markup=out_of_quota_markup(client.me.username),
+                        quote=True
+                    )
                 success = await send_file_with_fallback(client, message.chat.id, file_data, message.id)
-                if not success:
+                if success:
+                    await consume_search(user_id)
+                else:
                     await message.reply("❌ הקובץ נמחק מהמקור או שאין לי גישה אליו.", quote=True)
             return
 
@@ -128,7 +137,7 @@ async def send_home_message(client, message, user=None, is_edit=False):
          InlineKeyboardButton('✇ ערוץ עדכונים ✇', url=f'https://t.me/{update_channel}', style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('〄 עזרה 〄', callback_data='help', style=enums.ButtonStyle.PRIMARY),
          InlineKeyboardButton('⍟ אודות ⍟', callback_data='about', style=enums.ButtonStyle.PRIMARY)],
-        [InlineKeyboardButton('🔎 קניית חיפושים 🔎', callback_data='pay_menu', style=enums.ButtonStyle.SUCCESS)],
+        [InlineKeyboardButton('🔎 קניית קבצים 🔎', callback_data='pay_menu', style=enums.ButtonStyle.SUCCESS)],
         [InlineKeyboardButton('📨 פנייה לתמיכה', callback_data='support_start', style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('⇋ להוספה לקבוצה ⇋', url=f"http://t.me/{client.me.username}?startgroup&admin=delete_messages", style=enums.ButtonStyle.PRIMARY)]
     ]
@@ -168,9 +177,15 @@ async def callback_handler(client, query: CallbackQuery):
         
         file_data = await db.get_file(file_db_id)
         if file_data:
+            if not await check_quota(user_id):
+                return await query.message.edit_text(
+                    denial_text(),
+                    reply_markup=out_of_quota_markup(client.me.username)
+                )
             reply_to = query.message.reply_to_message.id if query.message.reply_to_message else None
             success = await send_file_with_fallback(client, query.message.chat.id, file_data, reply_to)
             if success:
+                await consume_search(user_id)
                 await query.message.delete()
             else:
                 await query.answer("❌ הקובץ נמחק מהמקור או שאין לי גישה אליו.", show_alert=True)

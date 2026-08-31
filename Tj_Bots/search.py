@@ -4,7 +4,6 @@ from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQ
 from database import db
 from config import UPDATE_CHANNEL, ADMINS
 from .utils import get_readable_size, clean_filename
-from .pay import check_quota, consume_search, out_of_quota_markup, denial_text
 import asyncio
 
 @Client.on_message(filters.text & ~filters.command(["start", "index", "newindex", "settings", "broadcast", "stats", "restart", "clean", "channels", "watch", "font", "share", "tts", "paste", "buy", "status", "admin"]))
@@ -36,13 +35,6 @@ async def search_handler(client, message):
                 await db.increment_blocked_attempt(message.from_user.id)
             return await message.reply("🚫 **החיפוש הזה אינו מורשה.**", quote=True)
 
-    if message.from_user and not await check_quota(message.from_user.id):
-        return await message.reply(
-            denial_text(),
-            reply_markup=out_of_quota_markup(client.me.username),
-            quote=True
-        )
-
     await db.log_search_query(query)
     results = await db.search_files(query)
 
@@ -56,7 +48,6 @@ async def search_handler(client, message):
         return
 
     if message.from_user:
-        await consume_search(message.from_user.id)
         await db.log_user_search(message.from_user.id, query)
 
     try:
