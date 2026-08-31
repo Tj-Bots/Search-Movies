@@ -71,11 +71,13 @@ def _composer_markup(state):
 
 
 def _composer_text(state):
-    text = (
-        "📢 <b>עריכת שידור</b>\n\n"
-        "📝 שלח לי כל הודעת טקסט בכל רגע - היא תיהפך לתוכן השידור.\n\n"
-        "הגדר את שאר השדות ולחץ 'שדר עכשיו' כשסיימת."
-    )
+    text = "📢 <b>עריכת שידור</b>\n\n"
+    if state['text']:
+        preview = state['text'] if len(state['text']) <= 250 else state['text'][:250] + "…"
+        text += f"<b>תוכן נוכחי:</b>\n<blockquote>{preview}</blockquote>\n\n"
+    else:
+        text += "📝 שלח לי כל הודעת טקסט בכל רגע - היא תיהפך לתוכן השידור.\n\n"
+    text += "הגדר את שאר השדות ולחץ 'שדר עכשיו' כשסיימת."
     if state['buttons'] and state['mode'] == 'forward':
         text += "\n\n⚠️ במצב Forward לא ניתן לצרף כפתורים - הם לא יישלחו."
     return text
@@ -104,7 +106,7 @@ def _buttons_editor_markup(state):
         ])
     keyboard.append([InlineKeyboardButton('➕ הוסף כפתורים', callback_data='bc2_buttons_more')])
     if state['buttons']:
-        keyboard.append([InlineKeyboardButton('🗑 מחק הכל', callback_data='bc2_buttons_clear', style=enums.ButtonStyle.DANGER)])
+        keyboard.append([InlineKeyboardButton('🗑 מחק הכל', callback_data='bc2_buttons_clear_ask', style=enums.ButtonStyle.DANGER)])
     keyboard.append([InlineKeyboardButton('✅ סיום', callback_data='bc2_buttons_done', style=enums.ButtonStyle.SUCCESS)])
     return InlineKeyboardMarkup(keyboard)
 
@@ -191,6 +193,9 @@ async def broadcast_callback(client, query):
     if not state:
         return await query.answer("הפעולה פגה, התחל מחדש.", show_alert=True)
 
+    if data not in ("bc2_buttons", "bc2_buttons_more"):
+        state['step'] = None
+
     if data == "bc2_audience":
         text = "🎯 <b>בחר יעד לשידור:</b>"
         markup = InlineKeyboardMarkup([
@@ -232,6 +237,14 @@ async def broadcast_callback(client, query):
         state['step'] = 'await_buttons'
         text = "⌨️ <b>שלח כפתורים נוספים</b>\n\nשורה אחת לכל כפתור:\n<code>טקסט - קישור</code>"
         markup = InlineKeyboardMarkup([[InlineKeyboardButton('🔙 חזרה', callback_data='bc2_view_buttons')]])
+        return await query.message.edit_caption(text, reply_markup=markup)
+
+    if data == "bc2_buttons_clear_ask":
+        text = "⚠️ <b>אישור מחיקה</b>\n\nלמחוק את כל הכפתורים?"
+        markup = InlineKeyboardMarkup([
+            [InlineKeyboardButton('✅ כן, מחק הכל', callback_data='bc2_buttons_clear', style=enums.ButtonStyle.DANGER),
+             InlineKeyboardButton('❌ ביטול', callback_data='bc2_view_buttons', style=enums.ButtonStyle.PRIMARY)],
+        ])
         return await query.message.edit_caption(text, reply_markup=markup)
 
     if data == "bc2_buttons_clear":

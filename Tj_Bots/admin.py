@@ -41,6 +41,22 @@ async def _notify_user(client, user_id, text):
         pass
 
 
+PENDING_CONFIRM = {}
+
+
+def _confirm_markup():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton('✅ כן, בצע', callback_data='adm_confirm_yes', style=enums.ButtonStyle.DANGER),
+         InlineKeyboardButton('❌ ביטול', callback_data='adm_confirm_no', style=enums.ButtonStyle.PRIMARY)],
+    ])
+
+
+async def _ask_confirm(query, description, on_confirm, on_cancel):
+    admin_id = query.from_user.id
+    PENDING_CONFIRM[admin_id] = {'confirm': on_confirm, 'cancel': on_cancel}
+    await query.message.edit_caption(f"⚠️ <b>אישור פעולה</b>\n\n{description}", reply_markup=_confirm_markup())
+
+
 # ---------- markup builders ----------
 
 def _panel_markup():
@@ -435,9 +451,15 @@ async def admin_text_input(client, message):
             markup = await _user_actions_markup(user_id, 1)
             return await client.edit_message_caption(panel_chat, panel_msg, caption=text, reply_markup=markup)
 
-        matches = await db.search_users_by_name(text_in, 10)
+        matches = await db.search_users_by_name(text_in, 50)
         if not matches:
-            return await client.edit_message_caption(panel_chat, panel_msg, caption=f"❌ לא נמצאו משתמשים עבור '{text_in}'.", reply_markup=_back_markup('adm_users_1'))
+            ADM_INPUT[admin_id] = {'action': 'find_user', 'panel_chat': panel_chat, 'panel_msg': panel_msg}
+            markup = InlineKeyboardMarkup([[InlineKeyboardButton('חזרה לרשימה ⋟', callback_data='adm_users_1', style=enums.ButtonStyle.PRIMARY)]])
+            return await client.edit_message_caption(
+                panel_chat, panel_msg,
+                caption=f"❌ לא נמצאו משתמשים עבור '{text_in}'.\n\n🔎 שלח מונח חיפוש נוסף, או חזרה לרשימה:",
+                reply_markup=markup
+            )
         if len(matches) == 1:
             user_id = matches[0]['_id']
             text = await _render_user_info(user_id)
@@ -455,9 +477,15 @@ async def admin_text_input(client, message):
             markup = _group_actions_markup(chat_id, 1, bool(ban_info))
             return await client.edit_message_caption(panel_chat, panel_msg, caption=text, reply_markup=markup)
 
-        matches = await db.search_groups_by_name(text_in, 10)
+        matches = await db.search_groups_by_name(text_in, 50)
         if not matches:
-            return await client.edit_message_caption(panel_chat, panel_msg, caption=f"❌ לא נמצאו קבוצות עבור '{text_in}'.", reply_markup=_back_markup('adm_groups_1'))
+            ADM_INPUT[admin_id] = {'action': 'find_group', 'panel_chat': panel_chat, 'panel_msg': panel_msg}
+            markup = InlineKeyboardMarkup([[InlineKeyboardButton('חזרה לרשימה ⋟', callback_data='adm_groups_1', style=enums.ButtonStyle.PRIMARY)]])
+            return await client.edit_message_caption(
+                panel_chat, panel_msg,
+                caption=f"❌ לא נמצאו קבוצות עבור '{text_in}'.\n\n🔎 שלח מונח חיפוש נוסף, או חזרה לרשימה:",
+                reply_markup=markup
+            )
         if len(matches) == 1:
             chat_id = matches[0]['_id']
             text = await _render_group_info(client, chat_id)
@@ -521,6 +549,21 @@ async def admin_callback(client, query):
     data = query.data
     admin_id = query.from_user.id
 
+    if data not in ("adm_confirm_yes", "adm_confirm_no"):
+        ADM_INPUT.pop(admin_id, None)
+
+    if data == "adm_confirm_yes":
+        pending = PENDING_CONFIRM.pop(admin_id, None)
+        if not pending:
+            return await query.answer("הפעולה פגה.", show_alert=True)
+        return await pending['confirm']()
+
+    if data == "adm_confirm_no":
+        pending = PENDING_CONFIRM.pop(admin_id, None)
+        if not pending:
+            return await send_admin_panel(query.message, is_edit=True)
+        return await pending['cancel']()
+
     if data == "adm_home":
         ADM_INPUT.pop(admin_id, None)
         return await send_admin_panel(query.message, is_edit=True)
@@ -542,12 +585,21 @@ async def admin_callback(client, query):
         kind, target_id_str, page_str = data[len("adm_unban1_"):].split('_')
         target_id = int(target_id_str)
         page = int(page_str) if page_str.isdigit() else 1
-        if kind == 'users':
-            await db.unban_user(target_id)
-        else:
-            await db.unban_chat(target_id)
-        text, markup = await _banlist_text_markup(kind, page)
-        return await query.message.edit_caption(f"✅ שוחרר: <code>{target_id}</code>\n\n{text}", reply_markup=markup)
+        label = "המשתמש" if kind == 'users' else "הקבוצה"
+
+        async def _do_unban1():
+            if kind == 'users':
+                await db.unban_user(target_id)
+            else:
+                await db.unban_chat(target_id)
+            text, markup = await _banlist_text_markup(kind, page)
+            await query.message.edit_caption(f"✅ שוחרר: <code>{target_id}</code>\n\n{text}", reply_markup=markup)
+
+        async def _cancel_unban1():
+            text, markup = await _banlist_text_markup(kind, page)
+            await query.message.edit_caption(text, reply_markup=markup)
+
+        return await _ask_confirm(query, f"לשחרר את {label} <code>{target_id}</code> מהחסימה?", _do_unban1, _cancel_unban1)
 
     if data == "adm_settings":
         return await query.message.edit_caption("⚙️ <b>הגדרות מערכת</b>\n\nבחר הגדרה:", reply_markup=await _settings_menu_markup())
@@ -596,13 +648,25 @@ async def admin_callback(client, query):
         user_id_str, _, page_str = rest.partition('_')
         user_id = int(user_id_str)
         page = int(page_str) if page_str.isdigit() else 1
-        if is_ban:
-            await db.ban_user(user_id, "נחסם דרך פרטי המשתמש")
-        else:
-            await db.unban_user(user_id)
-        text = await _render_user_info(user_id)
-        markup = await _user_actions_markup(user_id, page)
-        return await query.message.edit_caption(text, reply_markup=markup)
+
+        async def _do_toggle():
+            if is_ban:
+                await db.ban_user(user_id, "נחסם דרך פרטי המשתמש")
+            else:
+                await db.unban_user(user_id)
+            text = await _render_user_info(user_id)
+            markup = await _user_actions_markup(user_id, page)
+            await query.message.edit_caption(text, reply_markup=markup)
+
+        if not is_ban:
+            return await _do_toggle()
+
+        async def _cancel_toggle():
+            text = await _render_user_info(user_id)
+            markup = await _user_actions_markup(user_id, page)
+            await query.message.edit_caption(text, reply_markup=markup)
+
+        return await _ask_confirm(query, f"לחסום את המשתמש <code>{user_id}</code>?", _do_toggle, _cancel_toggle)
 
     if data.startswith("adm_history_"):
         rest = data[len("adm_history_"):]
@@ -685,25 +749,46 @@ async def admin_callback(client, query):
         chat_id_str, _, page_str = rest.partition('_')
         chat_id = int(chat_id_str)
         page = int(page_str) if page_str.isdigit() else 1
-        if is_ban:
-            await db.ban_chat(chat_id, "נחסמה דרך פרטי הקבוצה")
-        else:
-            await db.unban_chat(chat_id)
-        text = await _render_group_info(client, chat_id)
-        markup = _group_actions_markup(chat_id, page, is_ban)
-        return await query.message.edit_caption(text, reply_markup=markup)
+
+        async def _do_gtoggle():
+            if is_ban:
+                await db.ban_chat(chat_id, "נחסמה דרך פרטי הקבוצה")
+            else:
+                await db.unban_chat(chat_id)
+            text = await _render_group_info(client, chat_id)
+            markup = _group_actions_markup(chat_id, page, is_ban)
+            await query.message.edit_caption(text, reply_markup=markup)
+
+        if not is_ban:
+            return await _do_gtoggle()
+
+        async def _cancel_gtoggle():
+            text = await _render_group_info(client, chat_id)
+            ban_info = await db.get_chat_ban_status(chat_id)
+            markup = _group_actions_markup(chat_id, page, bool(ban_info))
+            await query.message.edit_caption(text, reply_markup=markup)
+
+        return await _ask_confirm(query, f"לחסום את הקבוצה <code>{chat_id}</code>?", _do_gtoggle, _cancel_gtoggle)
 
     if data.startswith("adm_gleave_"):
         chat_id_str, _, page_str = data[len("adm_gleave_"):].partition('_')
         chat_id = int(chat_id_str)
         page = int(page_str) if page_str.isdigit() else 1
-        try:
-            await client.leave_chat(chat_id)
-            note = "✅ הבוט עזב את הקבוצה."
-        except Exception as e:
-            note = f"❌ שגיאה: {e}"
-        text, markup = await _groups_page_text_markup(page)
-        return await query.message.edit_caption(f"{note}\n\n{text}", reply_markup=markup)
+
+        async def _do_gleave():
+            try:
+                await client.leave_chat(chat_id)
+                note = "✅ הבוט עזב את הקבוצה."
+            except Exception as e:
+                note = f"❌ שגיאה: {e}"
+            text, markup = await _groups_page_text_markup(page)
+            await query.message.edit_caption(f"{note}\n\n{text}", reply_markup=markup)
+
+        async def _cancel_gleave():
+            text, markup = await _groups_page_text_markup(page)
+            await query.message.edit_caption(text, reply_markup=markup)
+
+        return await _ask_confirm(query, "הבוט יעזוב את הקבוצה ויידרש להזמין אותו מחדש כדי לחזור. להמשיך?", _do_gleave, _cancel_gleave)
 
     if data.startswith("adm_groups_"):
         try:
@@ -728,9 +813,17 @@ async def admin_callback(client, query):
 
     if data.startswith("adm_ch_rm_"):
         chat_id = int(data[len("adm_ch_rm_"):])
-        await db.remove_watched_channel(chat_id)
-        text, markup = await _channels_list_text_markup()
-        return await query.message.edit_caption(f"✅ הוסר: <code>{chat_id}</code>\n\n{text}", reply_markup=markup)
+
+        async def _do_ch_rm():
+            await db.remove_watched_channel(chat_id)
+            text, markup = await _channels_list_text_markup()
+            await query.message.edit_caption(f"✅ הוסר: <code>{chat_id}</code>\n\n{text}", reply_markup=markup)
+
+        async def _cancel_ch_rm():
+            text, markup = await _channels_list_text_markup()
+            await query.message.edit_caption(text, reply_markup=markup)
+
+        return await _ask_confirm(query, f"להסיר את הערוץ <code>{chat_id}</code> מהמעקב?", _do_ch_rm, _cancel_ch_rm)
 
     if data == "adm_ch_status":
         from .index import INDEX_PROGRESS
