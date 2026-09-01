@@ -640,8 +640,14 @@ async def admin_text_input(client, message):
         except ValueError:
             return await client.edit_message_caption(panel_chat, panel_msg, caption="❌ מזהה לא תקין.", reply_markup=_channels_menu_markup())
         await db.add_watched_channel(chat_id)
+        markup = InlineKeyboardMarkup([
+            [InlineKeyboardButton('📜 אינדקס את ההיסטוריה של הערוץ', callback_data=f'adm_ch_histindex_{chat_id}', style=enums.ButtonStyle.SUCCESS)],
+            [InlineKeyboardButton('חזרה ⋟', callback_data='adm_channels_menu', style=enums.ButtonStyle.PRIMARY)],
+        ])
         return await client.edit_message_caption(
-            panel_chat, panel_msg, caption=f"✅ הערוץ <code>{chat_id}</code> נוסף למעקב.", reply_markup=_channels_menu_markup()
+            panel_chat, panel_msg,
+            caption=f"✅ הערוץ <code>{chat_id}</code> נוסף למעקב - כל קובץ חדש שם יישמר אוטומטית.\n\nרוצה גם לאנדקס את הקבצים הישנים שכבר קיימים בערוץ?",
+            reply_markup=markup
         )
 
     if action in ('ban_user', 'unban_user', 'ban_chat', 'unban_chat'):
@@ -1453,6 +1459,16 @@ async def admin_callback(client, query):
 
     if data == "adm_ch_index":
         return await _start_input(query, "start_index")
+
+    if data.startswith("adm_ch_histindex_"):
+        chat_id = int(data[len("adm_ch_histindex_"):])
+        from .index import index_channel_history
+        await query.message.edit_caption("⏳ מאתר את ההודעה האחרונה בערוץ...", reply_markup=None)
+        await index_channel_history(client, query.message, chat_id)
+        return await query.message.reply(
+            "לחזרה לפאנל הערוצים:",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('📡 ערוצים ⋟', callback_data='adm_channels_menu', style=enums.ButtonStyle.PRIMARY)]])
+        )
 
     if data == "adm_ch_list":
         text, markup = await _channels_list_text_markup()

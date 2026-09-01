@@ -1,6 +1,7 @@
 import motor.motor_asyncio
 import re
 import time
+from pymongo.errors import DuplicateKeyError, BulkWriteError
 from config import MONGO_URI, DB_NAME
 
 class Database:
@@ -38,6 +39,11 @@ class Database:
         self.support_threads = self.db[f"{prefix}_support_threads"]
         self.sub_admins = self.db[f"{prefix}_sub_admins"]
 
+        try:
+            await self.files.create_index('file_unique_id', unique=True)
+        except Exception as e:
+            print(f"Warning: could not create unique index on files.file_unique_id (existing duplicates?): {e}")
+
     async def add_user(self, user_id, first_name):
         if self.users is None: return False
         user = await self.users.find_one({'_id': user_id})
@@ -62,11 +68,22 @@ class Database:
 
     async def save_file(self, file_data):
         if self.files is None: return "error"
-        exist = await self.files.find_one({'file_unique_id': file_data['file_unique_id']})
-        if exist:
+        try:
+            await self.files.insert_one(file_data)
+            return "saved"
+        except DuplicateKeyError:
             return "duplicate"
-        await self.files.insert_one(file_data)
-        return "saved"
+
+    async def save_files_bulk(self, file_dicts):
+        """Insert a whole batch in one round-trip instead of one find+insert per file."""
+        if not file_dicts or self.files is None:
+            return 0, 0
+        try:
+            result = await self.files.insert_many(file_dicts, ordered=False)
+            return len(result.inserted_ids), 0
+        except BulkWriteError as e:
+            write_errors = e.details.get('writeErrors', [])
+            return len(file_dicts) - len(write_errors), len(write_errors)
 
     async def get_file(self, _id):
         from bson.objectid import ObjectId

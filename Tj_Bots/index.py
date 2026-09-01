@@ -43,9 +43,30 @@ async def start_indexing(client, message, full_arg):
 
     try:
         chat = await client.get_chat(chat_id)
-        chat_id = chat.id
     except Exception as e:
         return await message.reply(f"❌ לא מצליח לגשת לערוץ. וודא שאני מנהל שם.\nשגיאה: {e}", quote=True)
+
+    await run_indexing(client, message, chat, start_id, end_id)
+
+
+async def index_channel_history(client, message, chat_id):
+    """Auto-detects the latest message in the channel and indexes its entire history (1..latest)."""
+    try:
+        chat = await client.get_chat(chat_id)
+    except Exception as e:
+        return await message.reply(f"❌ לא מצליח לגשת לערוץ. וודא שאני מנהל שם.\nשגיאה: {e}", quote=True)
+
+    latest_id = 0
+    async for msg in client.get_chat_history(chat.id, limit=1):
+        latest_id = msg.id
+    if not latest_id:
+        return await message.reply("❌ לא נמצאו הודעות בערוץ.", quote=True)
+
+    await run_indexing(client, message, chat, 1, latest_id)
+
+
+async def run_indexing(client, message, chat, start_id, end_id):
+    chat_id = chat.id
 
     if INDEX_PROGRESS.get(chat_id, {}).get('running'):
         return await message.reply("⚠️ כבר רץ אינדוקס על הערוץ הזה.", quote=True)
@@ -86,6 +107,7 @@ async def start_indexing(client, message, full_arg):
             current_id += batch_size
             continue
 
+        batch_docs = []
         for msg in messages:
             if not msg or not msg.media: continue
             if msg.media not in [enums.MessageMediaType.VIDEO, enums.MessageMediaType.DOCUMENT, enums.MessageMediaType.AUDIO]: continue
@@ -94,14 +116,16 @@ async def start_indexing(client, message, full_arg):
             if not media: continue
 
             file_name = getattr(media, 'file_name', None) or msg.caption or f"File {msg.id}"
-            data = {
+            batch_docs.append({
                 'file_unique_id': media.file_unique_id, 'file_id': media.file_id,
                 'file_name': file_name, 'file_size': media.file_size,
                 'chat_id': chat_id, 'message_id': msg.id, 'caption': msg.caption or ""
-            }
-            res = await db.save_file(data)
-            if res == "saved": prog['saved'] += 1
-            else: prog['dups'] += 1
+            })
+
+        if batch_docs:
+            saved, dups = await db.save_files_bulk(batch_docs)
+            prog['saved'] += saved
+            prog['dups'] += dups
 
         current_id += batch_size
         prog['current'] = min(current_id, end_id)
@@ -157,7 +181,8 @@ async def new_channel_watch(client, message):
     try:
         chat_id = int(message.command[1])
         await db.add_watched_channel(chat_id)
-        await message.reply(f"✅ הערוץ `{chat_id}` נוסף למעקב בהצלחה!", quote=True)
+        btn = InlineKeyboardMarkup([[InlineKeyboardButton("📜 אינדקס את ההיסטוריה הקיימת", callback_data=f"adm_ch_histindex_{chat_id}")]])
+        await message.reply(f"✅ הערוץ `{chat_id}` נוסף למעקב בהצלחה!\n\nרוצה גם לאנדקס את הקבצים הישנים שכבר שם?", quote=True, reply_markup=btn)
     except Exception as e: await message.reply(f"❌ שגיאה: {e}", quote=True)
 
 @Client.on_message(filters.channel)
