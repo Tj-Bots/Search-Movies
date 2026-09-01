@@ -564,7 +564,9 @@ async def admin_text_input(client, message):
             await db.ban_chat(target_id, reason)
             result = f"🚫 הקבוצה <code>{target_id}</code> נחסמה.\nסיבה: {reason}"
             try:
-                await client.send_message(target_id, f"🚫 קבוצה זו נחסמה.\nסיבה: {reason}")
+                appeal_url = f"https://t.me/{client.me.username}?start=appeal_{target_id}"
+                appeal_markup = InlineKeyboardMarkup([[InlineKeyboardButton('📝 הגש ערעור', url=appeal_url)]])
+                await client.send_message(target_id, f"🚫 קבוצה זו נחסמה.\nסיבה: {reason}", reply_markup=appeal_markup)
                 await client.leave_chat(target_id)
             except Exception:
                 pass
@@ -784,6 +786,13 @@ async def admin_callback(client, query):
 
     if data not in ("adm_confirm_yes", "adm_confirm_no"):
         ADM_INPUT.pop(admin_id, None)
+
+    if data.startswith("adm_appeal_approve_"):
+        if admin_id not in ADMINS:
+            return await query.answer("⛔ למנהלים בלבד.", show_alert=True)
+        chat_id = int(data[len("adm_appeal_approve_"):])
+        await db.unban_chat(chat_id)
+        return await query.message.edit_text(f"✅ הקבוצה <code>{chat_id}</code> שוחררה מהחסימה.", reply_markup=None)
 
     if data == "adm_confirm_yes":
         pending = PENDING_CONFIRM.pop(admin_id, None)
