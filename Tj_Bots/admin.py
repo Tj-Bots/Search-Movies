@@ -29,7 +29,7 @@ PERMISSIONS_CATALOG = {
         'adm_resetfree_', 'adm_history_', 'adm_dm_', 'adm_ban2_', 'adm_unban2_', 'adm_searchpage_',
     ]},
     'perm_groups': {'label': '💬 קבוצות', 'prefixes': ['adm_groups', 'adm_groupview', 'adm_gleave', 'adm_gadmins', 'adm_gdemote', 'adm_gpromote', 'adm_searchpage_']},
-    'perm_settings': {'label': '⚙️ הגדרות מערכת', 'prefixes': ['adm_settings', 'adm_toggle_lock', 'adm_authchannel', 'adm_toggle_auth', 'adm_set_channel', 'adm_removechannel', 'adm_words']},
+    'perm_settings': {'label': '⚙️ הגדרות מערכת', 'prefixes': ['adm_toggle_lock', 'adm_authchannel', 'adm_toggle_auth', 'adm_set_channel', 'adm_removechannel', 'adm_words']},
     'perm_payments': {'label': '💰 מערכת תשלומים', 'prefixes': ['adm_payments', 'adm_toggle_payments', 'adm_set_freelimit', 'adm_set_refratio', 'adm_packages', 'adm_pkg', 'adm_resetfree_all']},
     'perm_stats': {'label': '📊 סטטיסטיקות', 'prefixes': ['adm_stats']},
     'perm_popular': {'label': '🔥 חיפושים פופולריים', 'prefixes': ['adm_popular']},
@@ -123,12 +123,18 @@ async def _ask_confirm(query, description, on_confirm, on_cancel):
 # ---------- markup builders ----------
 
 async def _panel_markup(user_id=None):
+    locked = await db.get_config('bot_locked', False)
+    lock_label = '🔒 הבוט נעול - לחץ לביטול' if locked else '🔓 הבוט פעיל - לחץ לנעילה'
+
     all_buttons = [
         ('perm_broadcast', InlineKeyboardButton('📢 שידור הודעות', callback_data='bc_menu', style=enums.ButtonStyle.PRIMARY)),
         ('perm_ban', InlineKeyboardButton('🚫 ניהול חסימות', callback_data='adm_ban_menu', style=enums.ButtonStyle.DANGER)),
         ('perm_users', InlineKeyboardButton('👥 משתמשים', callback_data='adm_users_1', style=enums.ButtonStyle.PRIMARY)),
         ('perm_groups', InlineKeyboardButton('💬 קבוצות', callback_data='adm_groups_1', style=enums.ButtonStyle.PRIMARY)),
-        ('perm_settings', InlineKeyboardButton('⚙️ הגדרות מערכת', callback_data='adm_settings', style=enums.ButtonStyle.PRIMARY)),
+        ('perm_settings', InlineKeyboardButton(lock_label, callback_data='adm_toggle_lock', style=enums.ButtonStyle.DANGER if locked else enums.ButtonStyle.SUCCESS)),
+        ('perm_settings', InlineKeyboardButton('📣 חיוב הרשמה', callback_data='adm_authchannel_menu', style=enums.ButtonStyle.PRIMARY)),
+        ('perm_settings', InlineKeyboardButton('🚫 מילים חסומות בחיפוש', callback_data='adm_words_menu', style=enums.ButtonStyle.DANGER)),
+        ('perm_payments', InlineKeyboardButton('💰 מערכת תשלומים', callback_data='adm_payments_menu', style=enums.ButtonStyle.SUCCESS)),
         ('perm_stats', InlineKeyboardButton('📊 סטטיסטיקות', callback_data='adm_stats', style=enums.ButtonStyle.PRIMARY)),
         ('perm_popular', InlineKeyboardButton('🔥 חיפושים פופולריים', callback_data='adm_popular', style=enums.ButtonStyle.PRIMARY)),
         ('perm_load', InlineKeyboardButton('📈 מד עומס שרת', callback_data='adm_load', style=enums.ButtonStyle.PRIMARY)),
@@ -218,18 +224,6 @@ async def _banlist_text_markup(kind, page):
     return text, InlineKeyboardMarkup(keyboard)
 
 
-async def _settings_menu_markup():
-    locked = await db.get_config('bot_locked', False)
-    lock_label = '🔒 הבוט נעול - לחץ לביטול' if locked else '🔓 הבוט פעיל - לחץ לנעילה'
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton(lock_label, callback_data='adm_toggle_lock', style=enums.ButtonStyle.DANGER if locked else enums.ButtonStyle.SUCCESS),
-         InlineKeyboardButton('📣 חיוב הרשמה ⋟', callback_data='adm_authchannel_menu', style=enums.ButtonStyle.PRIMARY)],
-        [InlineKeyboardButton('🚫 מילים חסומות בחיפוש', callback_data='adm_words_menu', style=enums.ButtonStyle.DANGER),
-         InlineKeyboardButton('💰 מערכת תשלומים', callback_data='adm_payments_menu', style=enums.ButtonStyle.SUCCESS)],
-        [InlineKeyboardButton('חזרה ⋟', callback_data='adm_home', style=enums.ButtonStyle.PRIMARY)],
-    ])
-
-
 async def _authchannel_menu_text_markup():
     from .utils import resolve_update_channel
     auth_force = await db.get_config('auth_force', AUTH_CHANNEL_FORCE)
@@ -255,7 +249,7 @@ async def _authchannel_menu_text_markup():
     ]
     if has_channel:
         keyboard.append([InlineKeyboardButton('🗑 הסרת הערוץ', callback_data='adm_removechannel_ask', style=enums.ButtonStyle.DANGER)])
-    keyboard.append([InlineKeyboardButton('חזרה ⋟', callback_data='adm_settings', style=enums.ButtonStyle.PRIMARY)])
+    keyboard.append([InlineKeyboardButton('חזרה ⋟', callback_data='adm_home', style=enums.ButtonStyle.PRIMARY)])
     return text, InlineKeyboardMarkup(keyboard)
 
 
@@ -313,7 +307,7 @@ async def _payments_menu_markup():
         [InlineKeyboardButton(f'🔗 יחס הזמנות לבונוס: {ratio}', callback_data='adm_set_refratio', style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('🎟 ניהול חבילות ומחירים', callback_data='adm_packages_menu', style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('🔄 איפוס מכסה יומית לכולם', callback_data='adm_resetfree_all_ask', style=enums.ButtonStyle.DANGER)],
-        [InlineKeyboardButton('חזרה ⋟', callback_data='adm_settings', style=enums.ButtonStyle.PRIMARY)],
+        [InlineKeyboardButton('חזרה ⋟', callback_data='adm_home', style=enums.ButtonStyle.PRIMARY)],
     ])
 
 
@@ -324,7 +318,7 @@ async def _words_menu_text_markup():
     markup = InlineKeyboardMarkup([
         [InlineKeyboardButton('➕ הוספת מילה', callback_data='adm_words_add', style=enums.ButtonStyle.DANGER),
          InlineKeyboardButton('➖ הסרת מילה', callback_data='adm_words_del', style=enums.ButtonStyle.SUCCESS)],
-        [InlineKeyboardButton('חזרה ⋟', callback_data='adm_settings', style=enums.ButtonStyle.PRIMARY)],
+        [InlineKeyboardButton('חזרה ⋟', callback_data='adm_home', style=enums.ButtonStyle.PRIMARY)],
     ])
     return text, markup
 
@@ -1032,14 +1026,22 @@ async def _subadmin_view_text_markup(user_id):
 
 def _subadmin_perms_markup(admin_id):
     wizard = SUBADMIN_WIZARD[admin_id]
-    keyboard = []
-    for perm_key, info in PERMISSIONS_CATALOG.items():
+    all_keys = list(PERMISSIONS_CATALOG.keys())
+
+    buttons = []
+    for perm_key in all_keys:
+        info = PERMISSIONS_CATALOG[perm_key]
         granted = perm_key in wizard['perms']
         mark = '🟢' if granted else '🔴'
-        keyboard.append([InlineKeyboardButton(
+        buttons.append(InlineKeyboardButton(
             f"{mark} {info['label']}", callback_data=f'adm_subadmin_permtoggle_{perm_key}',
             style=enums.ButtonStyle.SUCCESS if granted else enums.ButtonStyle.DANGER
-        )])
+        ))
+    keyboard = [buttons[i:i + 2] for i in range(0, len(buttons), 2)]
+
+    all_selected = len(wizard['perms']) == len(all_keys)
+    toggle_all_label = '⬜️ בטל הכל' if all_selected else '✅ סמן הכל'
+    keyboard.append([InlineKeyboardButton(toggle_all_label, callback_data='adm_subadmin_toggleall', style=enums.ButtonStyle.PRIMARY)])
     keyboard.append([InlineKeyboardButton('✅ המשך', callback_data='adm_subadmin_perms_done', style=enums.ButtonStyle.SUCCESS)])
     keyboard.append([InlineKeyboardButton('❌ ביטול', callback_data='adm_subadmins_menu', style=enums.ButtonStyle.DANGER)])
     return InlineKeyboardMarkup(keyboard)
@@ -1127,6 +1129,16 @@ async def admin_callback(client, query):
             wizard['perms'].add(perm_key)
         return await query.message.edit_reply_markup(_subadmin_perms_markup(admin_id))
 
+    if data == "adm_subadmin_toggleall":
+        wizard = SUBADMIN_WIZARD.get(admin_id)
+        if not wizard:
+            return await query.answer("הפעולה פגה, התחל מחדש.", show_alert=True)
+        if len(wizard['perms']) == len(PERMISSIONS_CATALOG):
+            wizard['perms'] = set()
+        else:
+            wizard['perms'] = set(PERMISSIONS_CATALOG.keys())
+        return await query.message.edit_reply_markup(_subadmin_perms_markup(admin_id))
+
     if data == "adm_subadmin_perms_done":
         wizard = SUBADMIN_WIZARD.get(admin_id)
         if not wizard:
@@ -1189,13 +1201,10 @@ async def admin_callback(client, query):
 
         return await _ask_confirm(query, f"לשחרר את {label} <code>{target_id}</code> מהחסימה?", _do_unban1, _cancel_unban1)
 
-    if data == "adm_settings":
-        return await query.message.edit_caption("⚙️ <b>הגדרות מערכת</b>\n\nבחר הגדרה:", reply_markup=await _settings_menu_markup())
-
     if data == "adm_toggle_lock":
         locked = await db.get_config('bot_locked', False)
         await db.set_config('bot_locked', not locked)
-        return await query.message.edit_caption("⚙️ <b>הגדרות מערכת</b>\n\nבחר הגדרה:", reply_markup=await _settings_menu_markup())
+        return await send_admin_panel(query.message, is_edit=True, user_id=admin_id)
 
     if data == "adm_authchannel_menu":
         text, markup = await _authchannel_menu_text_markup()
@@ -1553,7 +1562,7 @@ async def admin_callback(client, query):
         await index_channel_history(client, query.message, chat_id)
         return await query.message.reply(
             "לחזרה לפאנל הערוצים:",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('📡 ערוצים ⋟', callback_data='adm_channels_menu', style=enums.ButtonStyle.PRIMARY)]])
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton('📡 ערוצים', callback_data='adm_channels_menu', style=enums.ButtonStyle.PRIMARY)]])
         )
 
     if data == "adm_ch_list":
@@ -1656,7 +1665,7 @@ async def _start_input(query, action):
     info = PROMPTS[action]
     admin_id = query.from_user.id
     ADM_INPUT[admin_id] = {'action': action, 'panel_chat': query.message.chat.id, 'panel_msg': query.message.id}
-    back_targets = {'ban': 'adm_ban_menu', 'settings': 'adm_settings', 'authchannel': 'adm_authchannel_menu', 'words': 'adm_words_menu', 'users': 'adm_users_1', 'groups': 'adm_groups_1', 'channels': 'adm_channels_menu', 'payments': 'adm_payments_menu'}
+    back_targets = {'ban': 'adm_ban_menu', 'authchannel': 'adm_authchannel_menu', 'words': 'adm_words_menu', 'users': 'adm_users_1', 'groups': 'adm_groups_1', 'channels': 'adm_channels_menu', 'payments': 'adm_payments_menu'}
     markup = InlineKeyboardMarkup([[InlineKeyboardButton('❌ ביטול', callback_data=back_targets[info['back']])]])
     text = f"✏️ <b>{info['label']}</b>\n\n{info['prompt']}"
     await query.message.edit_caption(text, reply_markup=markup)
