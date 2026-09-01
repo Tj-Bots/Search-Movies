@@ -129,7 +129,7 @@ def _is_awaiting_input(_, __, message):
     return admin_id in BC_STATE
 
 
-@Client.on_message(filters.user(ADMINS) & filters.create(_is_awaiting_input))
+@Client.on_message(filters.create(_is_awaiting_input))
 async def broadcast_input(client, message):
     admin_id = message.from_user.id
     state = BC_STATE[admin_id]
@@ -179,6 +179,10 @@ async def broadcast_callback(client, query):
     data = query.data
     admin_id = query.from_user.id
 
+    from .admin import has_permission
+    if not await has_permission(admin_id, data):
+        return await query.answer("⛔ אין לך הרשאה לפעולה זו.", show_alert=True)
+
     if data == "bc_menu":
         state = _new_state(query.message.chat.id, query.message.id)
         BC_STATE[admin_id] = state
@@ -187,7 +191,7 @@ async def broadcast_callback(client, query):
     if data == "bc_cancel":
         BC_STATE.pop(admin_id, None)
         from .admin import send_admin_panel
-        return await send_admin_panel(query.message, is_edit=True)
+        return await send_admin_panel(query.message, is_edit=True, user_id=admin_id)
 
     state = BC_STATE.get(admin_id)
     if not state:

@@ -11,7 +11,63 @@ ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
 
 ADM_INPUT = {}
 ADM_SEARCH = {}
+SUBADMIN_WIZARD = {}
 USERS_PER_PAGE = 10
+
+DURATION_PRESETS = {
+    'perm': {'label': 'קבוע (לא פג תוקף)', 'seconds': None},
+    'day': {'label': 'יום אחד', 'seconds': 86400},
+    'week': {'label': 'שבוע', 'seconds': 7 * 86400},
+    'month': {'label': 'חודש', 'seconds': 30 * 86400},
+}
+
+PERMISSIONS_CATALOG = {
+    'perm_broadcast': {'label': '📢 שידור הודעות', 'prefixes': ['bc']},
+    'perm_ban': {'label': '🚫 ניהול חסימות', 'prefixes': ['adm_ban', 'adm_unban']},
+    'perm_users': {'label': '👥 משתמשים', 'prefixes': [
+        'adm_users', 'adm_userview', 'adm_searchmgmt', 'adm_grant', 'adm_revoke',
+        'adm_resetfree_', 'adm_history_', 'adm_dm_', 'adm_ban2_', 'adm_unban2_', 'adm_searchpage_',
+    ]},
+    'perm_groups': {'label': '💬 קבוצות', 'prefixes': ['adm_groups', 'adm_groupview', 'adm_gleave', 'adm_gadmins', 'adm_gdemote', 'adm_gpromote', 'adm_searchpage_']},
+    'perm_settings': {'label': '⚙️ הגדרות מערכת', 'prefixes': ['adm_settings', 'adm_toggle_lock', 'adm_toggle_auth', 'adm_set_channel', 'adm_words']},
+    'perm_payments': {'label': '💰 מערכת תשלומים', 'prefixes': ['adm_payments', 'adm_toggle_payments', 'adm_set_freelimit', 'adm_packages', 'adm_pkg', 'adm_resetfree_all']},
+    'perm_stats': {'label': '📊 סטטיסטיקות', 'prefixes': ['adm_stats']},
+    'perm_popular': {'label': '🔥 חיפושים פופולריים', 'prefixes': ['adm_popular']},
+    'perm_load': {'label': '📈 מד עומס שרת', 'prefixes': ['adm_load']},
+    'perm_stars': {'label': '⭐ תומכים בכוכבים', 'prefixes': ['adm_stars']},
+    'perm_channels': {'label': '📡 ערוצים', 'prefixes': ['adm_ch_', 'adm_channels']},
+    'perm_appeals': {'label': '🔓 בקשות ערעור', 'prefixes': ['adm_appeal']},
+}
+
+EXEMPT_CALLBACKS = ("adm_confirm_yes", "adm_confirm_no", "adm_home", "noop")
+
+
+def _get_perms_for_callback(data):
+    best_len = -1
+    perms = set()
+    for perm_key, info in PERMISSIONS_CATALOG.items():
+        for prefix in info['prefixes']:
+            if data == prefix or data.startswith(prefix):
+                if len(prefix) > best_len:
+                    best_len = len(prefix)
+                    perms = {perm_key}
+                elif len(prefix) == best_len:
+                    perms.add(perm_key)
+    return perms
+
+
+async def has_permission(user_id, data):
+    if user_id in ADMINS:
+        return True
+    if data in EXEMPT_CALLBACKS:
+        return True
+    sub = await db.get_sub_admin(user_id)
+    if not sub:
+        return False
+    perms_needed = _get_perms_for_callback(data)
+    if not perms_needed:
+        return False
+    return bool(perms_needed & set(sub.get('permissions', [])))
 
 PROMPTS = {
     'ban_user': {'label': 'חסימת משתמש', 'prompt': "שלח את מזהה המשתמש לחסימה (ואפשר סיבה אחרי רווח).\nלדוגמה: <code>123456789 הפרת חוקים</code>", 'back': 'ban'},
@@ -61,20 +117,33 @@ async def _ask_confirm(query, description, on_confirm, on_cancel):
 
 # ---------- markup builders ----------
 
-def _panel_markup():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton('📢 שידור הודעות', callback_data='bc_menu', style=enums.ButtonStyle.PRIMARY)],
-        [InlineKeyboardButton('🚫 ניהול חסימות', callback_data='adm_ban_menu', style=enums.ButtonStyle.DANGER),
-         InlineKeyboardButton('👥 משתמשים', callback_data='adm_users_1', style=enums.ButtonStyle.PRIMARY)],
-        [InlineKeyboardButton('💬 קבוצות', callback_data='adm_groups_1', style=enums.ButtonStyle.PRIMARY),
-         InlineKeyboardButton('⚙️ הגדרות מערכת', callback_data='adm_settings', style=enums.ButtonStyle.PRIMARY)],
-        [InlineKeyboardButton('📊 סטטיסטיקות', callback_data='adm_stats', style=enums.ButtonStyle.PRIMARY),
-         InlineKeyboardButton('🔥 חיפושים פופולריים', callback_data='adm_popular', style=enums.ButtonStyle.PRIMARY)],
-        [InlineKeyboardButton('📈 מד עומס שרת', callback_data='adm_load', style=enums.ButtonStyle.PRIMARY),
-         InlineKeyboardButton('⭐ תומכים בכוכבים', callback_data='adm_stars', style=enums.ButtonStyle.SUCCESS)],
-        [InlineKeyboardButton('📡 ערוצים', callback_data='adm_channels_menu', style=enums.ButtonStyle.PRIMARY)],
-        [InlineKeyboardButton('✘ סגור', callback_data='closea', style=enums.ButtonStyle.DANGER)],
-    ])
+async def _panel_markup(user_id=None):
+    all_rows = [
+        ('perm_broadcast', [InlineKeyboardButton('📢 שידור הודעות', callback_data='bc_menu', style=enums.ButtonStyle.PRIMARY)]),
+        ('perm_ban', [InlineKeyboardButton('🚫 ניהול חסימות', callback_data='adm_ban_menu', style=enums.ButtonStyle.DANGER)]),
+        ('perm_users', [InlineKeyboardButton('👥 משתמשים', callback_data='adm_users_1', style=enums.ButtonStyle.PRIMARY)]),
+        ('perm_groups', [InlineKeyboardButton('💬 קבוצות', callback_data='adm_groups_1', style=enums.ButtonStyle.PRIMARY)]),
+        ('perm_settings', [InlineKeyboardButton('⚙️ הגדרות מערכת', callback_data='adm_settings', style=enums.ButtonStyle.PRIMARY)]),
+        ('perm_stats', [InlineKeyboardButton('📊 סטטיסטיקות', callback_data='adm_stats', style=enums.ButtonStyle.PRIMARY)]),
+        ('perm_popular', [InlineKeyboardButton('🔥 חיפושים פופולריים', callback_data='adm_popular', style=enums.ButtonStyle.PRIMARY)]),
+        ('perm_load', [InlineKeyboardButton('📈 מד עומס שרת', callback_data='adm_load', style=enums.ButtonStyle.PRIMARY)]),
+        ('perm_stars', [InlineKeyboardButton('⭐ תומכים בכוכבים', callback_data='adm_stars', style=enums.ButtonStyle.SUCCESS)]),
+        ('perm_channels', [InlineKeyboardButton('📡 ערוצים', callback_data='adm_channels_menu', style=enums.ButtonStyle.PRIMARY)]),
+    ]
+
+    is_super = user_id is None or user_id in ADMINS
+    if is_super:
+        keyboard = [row for _, row in all_rows]
+        keyboard.append([InlineKeyboardButton('👥 אדמינים משניים', callback_data='adm_subadmins_menu', style=enums.ButtonStyle.SUCCESS)])
+    else:
+        sub = await db.get_sub_admin(user_id)
+        perms = set(sub.get('permissions', [])) if sub else set()
+        keyboard = [row for perm_key, row in all_rows if perm_key in perms]
+        if not keyboard:
+            keyboard = [[InlineKeyboardButton('אין לך הרשאות פעילות בפאנל', callback_data='noop')]]
+
+    keyboard.append([InlineKeyboardButton('✘ סגור', callback_data='closea', style=enums.ButtonStyle.DANGER)])
+    return InlineKeyboardMarkup(keyboard)
 
 
 def _channels_menu_markup():
@@ -249,15 +318,30 @@ async def _popular_text_markup():
     return text, markup
 
 
-async def send_admin_panel(message, is_edit=False):
+async def send_admin_panel(message, is_edit=False, user_id=None):
+    if user_id is None:
+        user_id = message.from_user.id if message.from_user else None
     text = "🛠 <b>פאנל ניהול</b>\n\nבחר פעולה:"
+    markup = await _panel_markup(user_id)
     if is_edit:
-        await message.edit_media(InputMediaPhoto(PHOTO_URL, caption=text), reply_markup=_panel_markup())
+        await message.edit_media(InputMediaPhoto(PHOTO_URL, caption=text), reply_markup=markup)
     else:
-        await message.reply_photo(PHOTO_URL, caption=text, reply_markup=_panel_markup(), quote=True)
+        await message.reply_photo(PHOTO_URL, caption=text, reply_markup=markup, quote=True)
 
 
-@Client.on_message(filters.command("admin") & filters.user(ADMINS))
+async def _is_admin_or_sub(_, __, update):
+    user = update.from_user
+    if not user:
+        return False
+    if user.id in ADMINS:
+        return True
+    return await db.get_sub_admin(user.id) is not None
+
+
+admin_or_sub_filter = filters.create(_is_admin_or_sub)
+
+
+@Client.on_message(filters.command("admin") & admin_or_sub_filter)
 async def admin_command(client, message):
     await send_admin_panel(message)
 
@@ -511,7 +595,7 @@ def _is_awaiting_input(_, __, message):
     return admin_id in ADM_INPUT
 
 
-@Client.on_message(filters.user(ADMINS) & filters.create(_is_awaiting_input))
+@Client.on_message(admin_or_sub_filter & filters.create(_is_awaiting_input))
 async def admin_text_input(client, message):
     admin_id = message.from_user.id
     state = ADM_INPUT.pop(admin_id)
@@ -611,6 +695,20 @@ async def admin_text_input(client, message):
             note = f"❌ שגיאה: {e}"
         text, markup = await _render_group_admins(client, chat_id, page)
         return await client.edit_message_caption(panel_chat, panel_msg, caption=f"{note}\n\n{text}", reply_markup=markup)
+
+    if action == 'subadmin_add_id':
+        try:
+            target_id = int(text_in)
+        except ValueError:
+            return await client.edit_message_caption(panel_chat, panel_msg, caption="❌ מזהה לא תקין.", reply_markup=_back_markup('adm_subadmins_menu'))
+        if target_id in ADMINS:
+            return await client.edit_message_caption(panel_chat, panel_msg, caption="❌ המשתמש הזה כבר מנהל ראשי.", reply_markup=_back_markup('adm_subadmins_menu'))
+        SUBADMIN_WIZARD[admin_id] = {'target': target_id, 'perms': set()}
+        return await client.edit_message_caption(
+            panel_chat, panel_msg,
+            caption=f"🎛 <b>בחר הרשאות עבור <code>{target_id}</code>:</b>\n\nלחץ על הרשאה כדי לסמן/לבטל, ואז 'המשך'.",
+            reply_markup=_subadmin_perms_markup(admin_id)
+        )
 
     if action == 'pkg_price':
         from .pay import set_package_price
@@ -777,19 +875,77 @@ async def admin_text_input(client, message):
         return await client.edit_message_caption(panel_chat, panel_msg, caption=caption, reply_markup=markup)
 
 
+# ---------- sub-admins ----------
+
+async def _subadmins_list_text_markup():
+    subs = await db.get_all_sub_admins()
+    text = "👥 <b>אדמינים משניים</b>\n\n"
+    keyboard = []
+    if subs:
+        for s in subs:
+            status = 'קבוע' if s.get('is_permanent') else 'זמני'
+            keyboard.append([InlineKeyboardButton(f"👤 {s['_id']} — {len(s.get('permissions', []))} הרשאות ({status})", callback_data=f"adm_subadmin_view_{s['_id']}")])
+        text += "לחץ על אדמין לצפייה בפרטים או הסרה:"
+    else:
+        text += "אין כרגע אדמינים משניים."
+    keyboard.append([InlineKeyboardButton('➕ הוספת אדמין משני', callback_data='adm_subadmin_add', style=enums.ButtonStyle.SUCCESS)])
+    keyboard.append([InlineKeyboardButton('חזרה ⋟', callback_data='adm_home', style=enums.ButtonStyle.PRIMARY)])
+    return text, InlineKeyboardMarkup(keyboard)
+
+
+async def _subadmin_view_text_markup(user_id):
+    sub = await db.get_sub_admin(user_id)
+    if not sub:
+        return None, None
+    if sub.get('is_permanent'):
+        expiry_line = 'קבוע (לא פג תוקף)'
+    else:
+        remaining = sub.get('expire_at', 0) - time.time()
+        hours = max(int(remaining // 3600), 0)
+        expiry_line = f"עוד כ-{hours} שעות"
+    perm_labels = "\n".join(f"• {PERMISSIONS_CATALOG[p]['label']}" for p in sub.get('permissions', []) if p in PERMISSIONS_CATALOG)
+    text = (
+        f"👤 <b>אדמין משני: <code>{user_id}</code></b>\n\n"
+        f"<blockquote>⏳ תוקף: {expiry_line}\n\n<b>הרשאות:</b>\n{perm_labels or 'אין הרשאות'}</blockquote>"
+    )
+    keyboard = [
+        [InlineKeyboardButton('🗑 הסר אדמין משני', callback_data=f'adm_subadmin_remove_{user_id}_ask', style=enums.ButtonStyle.DANGER)],
+        [InlineKeyboardButton('חזרה לרשימה ⋟', callback_data='adm_subadmins_menu', style=enums.ButtonStyle.PRIMARY)],
+    ]
+    return text, InlineKeyboardMarkup(keyboard)
+
+
+def _subadmin_perms_markup(admin_id):
+    wizard = SUBADMIN_WIZARD[admin_id]
+    keyboard = []
+    for perm_key, info in PERMISSIONS_CATALOG.items():
+        mark = '☑️' if perm_key in wizard['perms'] else '⬜️'
+        keyboard.append([InlineKeyboardButton(f"{mark} {info['label']}", callback_data=f'adm_subadmin_permtoggle_{perm_key}')])
+    keyboard.append([InlineKeyboardButton('✅ המשך', callback_data='adm_subadmin_perms_done', style=enums.ButtonStyle.SUCCESS)])
+    keyboard.append([InlineKeyboardButton('❌ ביטול', callback_data='adm_subadmins_menu', style=enums.ButtonStyle.DANGER)])
+    return InlineKeyboardMarkup(keyboard)
+
+
+def _subadmin_duration_markup():
+    keyboard = [[InlineKeyboardButton(info['label'], callback_data=f'adm_subadmin_duration_{key}')] for key, info in DURATION_PRESETS.items()]
+    keyboard.append([InlineKeyboardButton('❌ ביטול', callback_data='adm_subadmins_menu', style=enums.ButtonStyle.DANGER)])
+    return InlineKeyboardMarkup(keyboard)
+
+
 # ---------- callbacks ----------
 
-@Client.on_callback_query(filters.regex(r"^adm_"))
+@Client.on_callback_query(filters.regex(r"^adm_") & admin_or_sub_filter)
 async def admin_callback(client, query):
     data = query.data
     admin_id = query.from_user.id
+
+    if not await has_permission(admin_id, data):
+        return await query.answer("⛔ אין לך הרשאה לפעולה זו.", show_alert=True)
 
     if data not in ("adm_confirm_yes", "adm_confirm_no"):
         ADM_INPUT.pop(admin_id, None)
 
     if data.startswith("adm_appeal_approve_"):
-        if admin_id not in ADMINS:
-            return await query.answer("⛔ למנהלים בלבד.", show_alert=True)
         chat_id = int(data[len("adm_appeal_approve_"):])
         await db.unban_chat(chat_id)
         return await query.message.edit_text(f"✅ הקבוצה <code>{chat_id}</code> שוחררה מהחסימה.", reply_markup=None)
@@ -803,12 +959,83 @@ async def admin_callback(client, query):
     if data == "adm_confirm_no":
         pending = PENDING_CONFIRM.pop(admin_id, None)
         if not pending:
-            return await send_admin_panel(query.message, is_edit=True)
+            return await send_admin_panel(query.message, is_edit=True, user_id=admin_id)
         return await pending['cancel']()
 
     if data == "adm_home":
         ADM_INPUT.pop(admin_id, None)
-        return await send_admin_panel(query.message, is_edit=True)
+        return await send_admin_panel(query.message, is_edit=True, user_id=admin_id)
+
+    if data == "adm_subadmins_menu":
+        SUBADMIN_WIZARD.pop(admin_id, None)
+        text, markup = await _subadmins_list_text_markup()
+        return await query.message.edit_caption(text, reply_markup=markup)
+
+    if data == "adm_subadmin_add":
+        ADM_INPUT[admin_id] = {'action': 'subadmin_add_id', 'panel_chat': query.message.chat.id, 'panel_msg': query.message.id}
+        markup = InlineKeyboardMarkup([[InlineKeyboardButton('❌ ביטול', callback_data='adm_subadmins_menu')]])
+        return await query.message.edit_caption("✏️ <b>הוספת אדמין משני</b>\n\nשלח את מזהה המשתמש (ID) שברצונך למנות.", reply_markup=markup)
+
+    if data.startswith("adm_subadmin_view_"):
+        target_id = int(data[len("adm_subadmin_view_"):])
+        text, markup = await _subadmin_view_text_markup(target_id)
+        if not text:
+            return await query.answer("❌ האדמין לא נמצא.", show_alert=True)
+        return await query.message.edit_caption(text, reply_markup=markup)
+
+    if data.startswith("adm_subadmin_remove_") and data.endswith("_ask"):
+        target_id = int(data[len("adm_subadmin_remove_"):-len("_ask")])
+
+        async def _do_remove():
+            await db.remove_sub_admin(target_id)
+            text, markup = await _subadmins_list_text_markup()
+            await query.message.edit_caption(f"✅ האדמין הוסר.\n\n{text}", reply_markup=markup)
+
+        async def _cancel_remove():
+            text, markup = await _subadmin_view_text_markup(target_id)
+            await query.message.edit_caption(text, reply_markup=markup)
+
+        return await _ask_confirm(query, f"להסיר את <code>{target_id}</code> מרשימת האדמינים המשניים?", _do_remove, _cancel_remove)
+
+    if data.startswith("adm_subadmin_permtoggle_"):
+        perm_key = data[len("adm_subadmin_permtoggle_"):]
+        wizard = SUBADMIN_WIZARD.get(admin_id)
+        if not wizard:
+            return await query.answer("הפעולה פגה, התחל מחדש.", show_alert=True)
+        if perm_key in wizard['perms']:
+            wizard['perms'].discard(perm_key)
+        else:
+            wizard['perms'].add(perm_key)
+        return await query.message.edit_reply_markup(_subadmin_perms_markup(admin_id))
+
+    if data == "adm_subadmin_perms_done":
+        wizard = SUBADMIN_WIZARD.get(admin_id)
+        if not wizard:
+            return await query.answer("הפעולה פגה, התחל מחדש.", show_alert=True)
+        if not wizard['perms']:
+            return await query.answer("❌ יש לבחור לפחות הרשאה אחת.", show_alert=True)
+        return await query.message.edit_caption("⏳ <b>בחר תוקף להרשאה:</b>", reply_markup=_subadmin_duration_markup())
+
+    if data.startswith("adm_subadmin_duration_"):
+        key = data[len("adm_subadmin_duration_"):]
+        wizard = SUBADMIN_WIZARD.pop(admin_id, None)
+        if not wizard or key not in DURATION_PRESETS:
+            return await query.answer("הפעולה פגה, התחל מחדש.", show_alert=True)
+        seconds = DURATION_PRESETS[key]['seconds']
+        is_permanent = seconds is None
+        expire_at = None if is_permanent else time.time() + seconds
+        target_id = wizard['target']
+        await db.add_sub_admin(target_id, list(wizard['perms']), expire_at=expire_at, is_permanent=is_permanent)
+        try:
+            perm_labels = "\n".join(f"• {PERMISSIONS_CATALOG[p]['label']}" for p in wizard['perms'])
+            await client.send_message(
+                target_id,
+                f"🎉 <b>מונית לאדמין משני בבוט!</b>\n\nההרשאות שלך:\n{perm_labels}\n\nהשתמש בפקודה /admin כדי לגשת לפאנל."
+            )
+        except Exception:
+            pass
+        text, markup = await _subadmins_list_text_markup()
+        return await query.message.edit_caption(f"✅ האדמין המשני נוסף בהצלחה.\n\n{text}", reply_markup=markup)
 
     if data == "adm_ban_menu":
         return await query.message.edit_caption("🚫 <b>ניהול חסימות</b>\n\nבחר פעולה:", reply_markup=_ban_menu_markup())

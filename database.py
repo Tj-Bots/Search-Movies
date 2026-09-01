@@ -19,6 +19,7 @@ class Database:
         self.search_log = None
         self.user_search_log = None
         self.support_threads = None
+        self.sub_admins = None
 
     async def init_database(self, bot):
         me = await bot.get_me()
@@ -35,6 +36,7 @@ class Database:
         self.search_log = self.db[f"{prefix}_search_log"]
         self.user_search_log = self.db[f"{prefix}_user_search_log"]
         self.support_threads = self.db[f"{prefix}_support_threads"]
+        self.sub_admins = self.db[f"{prefix}_sub_admins"]
 
     async def add_user(self, user_id, first_name):
         if self.users is None: return False
@@ -354,5 +356,29 @@ class Database:
     async def is_continue_marker(self, user_id, message_id):
         doc = await self.support_threads.find_one({'_id': f"cont:{user_id}:{message_id}"})
         return doc is not None
+
+    async def add_sub_admin(self, user_id, permissions, expire_at=None, is_permanent=False):
+        await self.sub_admins.update_one(
+            {'_id': user_id},
+            {'$set': {'permissions': permissions, 'expire_at': expire_at, 'is_permanent': is_permanent}},
+            upsert=True
+        )
+
+    async def remove_sub_admin(self, user_id):
+        await self.sub_admins.delete_one({'_id': user_id})
+
+    async def get_sub_admin(self, user_id):
+        if self.sub_admins is None: return None
+        doc = await self.sub_admins.find_one({'_id': user_id})
+        if not doc:
+            return None
+        if not doc.get('is_permanent') and doc.get('expire_at') and doc['expire_at'] < time.time():
+            await self.sub_admins.delete_one({'_id': user_id})
+            return None
+        return doc
+
+    async def get_all_sub_admins(self):
+        if self.sub_admins is None: return []
+        return await self.sub_admins.find({}).to_list(length=1000)
 
 db = Database()
