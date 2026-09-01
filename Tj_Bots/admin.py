@@ -4,7 +4,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 from pyrogram import Client, filters, enums
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto, ChatPrivileges
-from config import ADMINS, PHOTO_URL, AUTH_CHANNEL_FORCE
+from config import ADMINS, PHOTO_URL, AUTH_CHANNEL_FORCE, UPDATE_CHANNEL
 from database import db
 
 ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
@@ -74,7 +74,11 @@ PROMPTS = {
     'unban_user': {'label': 'שחרור משתמש', 'prompt': "שלח את מזהה המשתמש לשחרור.", 'back': 'ban'},
     'ban_chat': {'label': 'חסימת קבוצה', 'prompt': "שלח את מזהה הקבוצה לחסימה (ואפשר סיבה אחרי רווח).", 'back': 'ban'},
     'unban_chat': {'label': 'שחרור קבוצה', 'prompt': "שלח את מזהה הקבוצה לשחרור.", 'back': 'ban'},
-    'set_channel': {'label': 'שינוי ערוץ עדכונים', 'prompt': "שלח את שם המשתמש של הערוץ (בלי @).\nלדוגמה: <code>searchgram_bots</code>", 'back': 'settings'},
+    'set_channel': {'label': 'שינוי ערוץ עדכונים', 'prompt': (
+        "שלח את שם המשתמש של הערוץ (בלי @) לערוץ ציבורי - לדוגמה: <code>searchgram_bots</code>\n\n"
+        "או שלח את המזהה (ID) לערוץ פרטי - לדוגמה: <code>-1001234567890</code>\n"
+        "(הבוט חייב להיות חבר בערוץ הפרטי, כאדמין עם הרשאת הזמנת משתמשים)"
+    ), 'back': 'settings'},
     'add_word': {'label': 'הוספת מילה חסומה', 'prompt': "שלח את המילה/הביטוי שברצונך לחסום מחיפוש.", 'back': 'words'},
     'del_word': {'label': 'הסרת מילה חסומה', 'prompt': "שלח את המילה שברצונך להסיר מהחסימה.", 'back': 'words'},
     'find_user': {'label': 'איתור משתמש', 'prompt': "שלח מזהה (ID) או שם משתמש לחיפוש.", 'back': 'users'},
@@ -211,14 +215,22 @@ async def _banlist_text_markup(kind, page):
 
 
 async def _settings_menu_markup():
+    from .utils import resolve_update_channel
     locked = await db.get_config('bot_locked', False)
     auth_force = await db.get_config('auth_force', AUTH_CHANNEL_FORCE)
+    update_channel_cfg = await db.get_config('update_channel', UPDATE_CHANNEL)
+    if isinstance(update_channel_cfg, dict):
+        channel_display = update_channel_cfg.get('title') or update_channel_cfg.get('value') or 'לא ידוע'
+        if update_channel_cfg.get('kind') == 'private':
+            channel_display += ' (פרטי)'
+    else:
+        channel_display = update_channel_cfg
     lock_label = '🔒 הבוט נעול - לחץ לביטול' if locked else '🔓 הבוט פעיל - לחץ לנעילה'
     auth_label = '🔒 חיוב הרשמה: מופעל' if auth_force else '🔓 חיוב הרשמה: כבוי'
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(lock_label, callback_data='adm_toggle_lock', style=enums.ButtonStyle.DANGER if locked else enums.ButtonStyle.SUCCESS)],
         [InlineKeyboardButton(auth_label, callback_data='adm_toggle_auth', style=enums.ButtonStyle.DANGER if auth_force else enums.ButtonStyle.SUCCESS)],
-        [InlineKeyboardButton('✏️ שינוי ערוץ חיוב הרשמה', callback_data='adm_set_channel', style=enums.ButtonStyle.PRIMARY)],
+        [InlineKeyboardButton(f'✏️ ערוץ חיוב הרשמה: {channel_display}', callback_data='adm_set_channel', style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('🚫 מילים חסומות בחיפוש', callback_data='adm_words_menu', style=enums.ButtonStyle.DANGER)],
         [InlineKeyboardButton('💰 מערכת תשלומים', callback_data='adm_payments_menu', style=enums.ButtonStyle.SUCCESS)],
         [InlineKeyboardButton('חזרה ⋟', callback_data='adm_home', style=enums.ButtonStyle.PRIMARY)],
@@ -664,10 +676,28 @@ async def admin_text_input(client, message):
         return await client.edit_message_caption(panel_chat, panel_msg, caption=result, reply_markup=_ban_menu_markup())
 
     if action == 'set_channel':
-        channel = text_in.lstrip('@').strip()
+        text_in = text_in.strip()
+
+        if text_in.lstrip('-').isdigit():
+            try:
+                channel_id = int(text_in)
+                chat = await client.get_chat(channel_id)
+                invite_link = chat.invite_link or await client.export_chat_invite_link(channel_id)
+            except Exception as e:
+                return await client.edit_message_caption(
+                    panel_chat, panel_msg,
+                    caption=f"❌ לא ניתן להגדיר את הערוץ הפרטי: {e}\n\nודא שהבוט חבר בערוץ, אדמין, ויש לו הרשאת הזמנת משתמשים.",
+                    reply_markup=await _settings_menu_markup()
+                )
+            await db.set_config('update_channel', {'kind': 'private', 'id': channel_id, 'invite_link': invite_link, 'title': chat.title})
+            return await client.edit_message_caption(
+                panel_chat, panel_msg, caption=f"✅ ערוץ העדכונים עודכן לערוץ פרטי: <b>{chat.title}</b>.", reply_markup=await _settings_menu_markup()
+            )
+
+        channel = text_in.lstrip('@')
         if not channel:
             return await client.edit_message_caption(panel_chat, panel_msg, caption="❌ שם ערוץ לא תקין.", reply_markup=await _settings_menu_markup())
-        await db.set_config('update_channel', channel)
+        await db.set_config('update_channel', {'kind': 'public', 'value': channel})
         return await client.edit_message_caption(
             panel_chat, panel_msg, caption=f"✅ ערוץ העדכונים עודכן ל-<code>{channel}</code>.", reply_markup=await _settings_menu_markup()
         )
