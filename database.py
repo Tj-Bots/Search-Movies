@@ -188,6 +188,10 @@ class Database:
     async def reset_free_usage(self, user_id, today):
         await self.users.update_one({'_id': user_id}, {'$set': {'free_used': 0, 'free_date': today}}, upsert=True)
 
+    async def reset_all_free_usage(self, today):
+        result = await self.users.update_many({}, {'$set': {'free_used': 0, 'free_date': today}})
+        return result.modified_count
+
     async def increment_free_usage(self, user_id):
         await self.users.update_one({'_id': user_id}, {'$inc': {'free_used': 1}}, upsert=True)
 

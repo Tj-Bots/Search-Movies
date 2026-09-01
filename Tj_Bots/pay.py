@@ -1,4 +1,5 @@
 import time
+import uuid
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from pyrogram import Client, filters, enums
@@ -11,21 +12,152 @@ ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
 LIFETIME_SECONDS = 100 * 365 * 24 * 3600  # effectively forever
 LIFETIME_DISPLAY_THRESHOLD = 5 * 365 * 24 * 3600  # anything left above this shows as lifetime, not a countdown
 
-TIME_PACKAGES = {
-    "time_1h": {"stars": 50, "hours": 1, "label": "שעה ללא הגבלה - 50 כוכבים"},
-    "time_3h": {"stars": 125, "hours": 3, "label": "3 שעות ללא הגבלה - 125 כוכבים"},
-    "time_24h": {"stars": 250, "hours": 24, "label": "24 שעות ללא הגבלה - 250 כוכבים"},
-    "time_life": {"stars": 2000, "lifetime": True, "label": "לכל החיים ללא הגבלה - 2000 כוכבים"},
+BASE_TIME_PACKAGES = {
+    "time_1h": {"stars": 50, "hours": 1, "name": "שעה ללא הגבלה"},
+    "time_3h": {"stars": 125, "hours": 3, "name": "3 שעות ללא הגבלה"},
+    "time_24h": {"stars": 250, "hours": 24, "name": "24 שעות ללא הגבלה"},
+    "time_life": {"stars": 2000, "lifetime": True, "name": "לכל החיים ללא הגבלה"},
 }
 
-COUNT_PACKAGES = {
-    "count_1": {"stars": 5, "searches": 1, "label": "קובץ בודד - 5 כוכבים"},
-    "count_20": {"stars": 50, "searches": 20, "label": "20 קבצים - 50 כוכבים"},
-    "count_60": {"stars": 125, "searches": 60, "label": "60 קבצים - 125 כוכבים"},
-    "count_150": {"stars": 250, "searches": 150, "label": "150 קבצים - 250 כוכבים"},
+BASE_COUNT_PACKAGES = {
+    "count_1": {"stars": 5, "searches": 1, "name": "קובץ בודד"},
+    "count_20": {"stars": 50, "searches": 20, "name": "20 קבצים"},
+    "count_60": {"stars": 125, "searches": 60, "name": "60 קבצים"},
+    "count_150": {"stars": 250, "searches": 150, "name": "150 קבצים"},
 }
 
-ALL_PACKAGES = {**TIME_PACKAGES, **COUNT_PACKAGES}
+
+def _label(name, stars):
+    return f"{name} - {stars} כוכבים"
+
+
+async def _pkg_overrides():
+    return await db.get_config('pkg_overrides', {})
+
+
+async def get_time_packages(include_inactive=False):
+    overrides = await _pkg_overrides()
+    result = {}
+    for key, p in BASE_TIME_PACKAGES.items():
+        ov = overrides.get(key, {})
+        active = ov.get('active', True)
+        if not active and not include_inactive:
+            continue
+        stars = ov.get('stars', p['stars'])
+        result[key] = {
+            'stars': stars, 'hours': p.get('hours'), 'lifetime': p.get('lifetime', False),
+            'name': p['name'], 'label': _label(p['name'], stars),
+            'active': active, 'kind': 'time', 'custom': False,
+        }
+    for cp in await db.get_config('custom_time_pkgs', []):
+        active = cp.get('active', True)
+        if not active and not include_inactive:
+            continue
+        key = f"ctime_{cp['id']}"
+        result[key] = {
+            'stars': cp['stars'], 'hours': cp.get('hours'), 'lifetime': cp.get('lifetime', False),
+            'name': cp['name'], 'label': _label(cp['name'], cp['stars']),
+            'active': active, 'kind': 'time', 'custom': True,
+        }
+    return result
+
+
+async def get_count_packages(include_inactive=False):
+    overrides = await _pkg_overrides()
+    result = {}
+    for key, p in BASE_COUNT_PACKAGES.items():
+        ov = overrides.get(key, {})
+        active = ov.get('active', True)
+        if not active and not include_inactive:
+            continue
+        stars = ov.get('stars', p['stars'])
+        result[key] = {
+            'stars': stars, 'searches': p['searches'],
+            'name': p['name'], 'label': _label(p['name'], stars),
+            'active': active, 'kind': 'count', 'custom': False,
+        }
+    for cp in await db.get_config('custom_count_pkgs', []):
+        active = cp.get('active', True)
+        if not active and not include_inactive:
+            continue
+        key = f"ccount_{cp['id']}"
+        result[key] = {
+            'stars': cp['stars'], 'searches': cp['searches'],
+            'name': cp['name'], 'label': _label(cp['name'], cp['stars']),
+            'active': active, 'kind': 'count', 'custom': True,
+        }
+    return result
+
+
+async def get_all_packages(include_inactive=False):
+    merged = {}
+    merged.update(await get_time_packages(include_inactive))
+    merged.update(await get_count_packages(include_inactive))
+    return merged
+
+
+def _pkg_list_key(key):
+    if key.startswith('ctime_'):
+        return 'custom_time_pkgs'
+    if key.startswith('ccount_'):
+        return 'custom_count_pkgs'
+    return None
+
+
+async def set_package_price(key, stars):
+    list_key = _pkg_list_key(key)
+    if list_key:
+        pkg_id = key.split('_', 1)[1]
+        items = await db.get_config(list_key, [])
+        for it in items:
+            if it['id'] == pkg_id:
+                it['stars'] = stars
+        await db.set_config(list_key, items)
+    else:
+        overrides = await _pkg_overrides()
+        ov = overrides.get(key, {})
+        ov['stars'] = stars
+        overrides[key] = ov
+        await db.set_config('pkg_overrides', overrides)
+
+
+async def toggle_package_active(key):
+    list_key = _pkg_list_key(key)
+    if list_key:
+        pkg_id = key.split('_', 1)[1]
+        items = await db.get_config(list_key, [])
+        for it in items:
+            if it['id'] == pkg_id:
+                it['active'] = not it.get('active', True)
+        await db.set_config(list_key, items)
+    else:
+        overrides = await _pkg_overrides()
+        ov = overrides.get(key, {})
+        ov['active'] = not ov.get('active', True)
+        overrides[key] = ov
+        await db.set_config('pkg_overrides', overrides)
+
+
+async def delete_custom_package(key):
+    list_key = _pkg_list_key(key)
+    if not list_key:
+        return
+    pkg_id = key.split('_', 1)[1]
+    items = await db.get_config(list_key, [])
+    items = [it for it in items if it['id'] != pkg_id]
+    await db.set_config(list_key, items)
+
+
+async def add_custom_time_package(name, stars, hours=None, lifetime=False):
+    items = await db.get_config('custom_time_pkgs', [])
+    items.append({'id': uuid.uuid4().hex[:8], 'name': name, 'stars': stars, 'hours': hours, 'lifetime': lifetime, 'active': True})
+    await db.set_config('custom_time_pkgs', items)
+
+
+async def add_custom_count_package(name, searches, stars):
+    items = await db.get_config('custom_count_pkgs', [])
+    items.append({'id': uuid.uuid4().hex[:8], 'name': name, 'searches': searches, 'stars': stars, 'active': True})
+    await db.set_config('custom_count_pkgs', items)
 
 
 def _today_str():
@@ -198,17 +330,19 @@ async def pay_callback(client, query: CallbackQuery):
         return await send_buy_menu(query.message, user_id, is_edit=True)
 
     if data == "pay_cat_time":
+        packages = await get_time_packages()
         text = "⏰ <b>בחר חבילת זמן:</b>\n\nבתקופת החבילה תוכל לקבל קבצים ללא הגבלה."
-        return await _edit_photo(query.message, text, _packages_markup(TIME_PACKAGES))
+        return await _edit_photo(query.message, text, _packages_markup(packages))
 
     if data == "pay_cat_count":
+        packages = await get_count_packages()
         status = await _status_block(user_id)
         text = f"🔍 <b>בחר חבילת קבצים:</b>\n\n{status}"
-        return await _edit_photo(query.message, text, _packages_markup(COUNT_PACKAGES))
+        return await _edit_photo(query.message, text, _packages_markup(packages))
 
     if data.startswith("pay_buy_"):
         key = data[len("pay_buy_"):]
-        package = ALL_PACKAGES.get(key)
+        package = (await get_all_packages()).get(key)
         if not package:
             return await query.answer("❌ חבילה לא קיימת.", show_alert=True)
 
@@ -227,7 +361,7 @@ async def pay_callback(client, query: CallbackQuery):
 async def pay_pre_checkout(client, pre_checkout_query):
     payload = pre_checkout_query.invoice_payload or ""
     parts = payload.split("|")
-    if len(parts) == 3 and parts[0] == "pay" and parts[1] in ALL_PACKAGES:
+    if len(parts) == 3 and parts[0] == "pay" and parts[1] in (await get_all_packages(include_inactive=True)):
         return await pre_checkout_query.answer(ok=True)
     await pre_checkout_query.answer(ok=False, error_message="❌ החבילה לא נמצאה, נסה שוב.")
 
@@ -240,14 +374,14 @@ async def pay_successful(client, message):
         return
 
     key = parts[1]
-    package = ALL_PACKAGES.get(key)
+    package = (await get_all_packages(include_inactive=True)).get(key)
     if not package:
         return
 
     user_id = message.from_user.id
     stars = message.successful_payment.total_amount
 
-    if key in TIME_PACKAGES:
+    if package['kind'] == "time":
         kind = "time"
         if package.get('lifetime'):
             value = "lifetime"
@@ -290,9 +424,10 @@ async def build_purchase_stats_text():
     ]
 
     if stats['packages']:
+        all_packages = await get_all_packages(include_inactive=True)
         lines.append("**לפי חבילה:**")
         for key, info in stats['packages'].items():
-            label = ALL_PACKAGES.get(key, {}).get('label', key)
+            label = all_packages.get(key, {}).get('label', key)
             lines.append(f"• {label} — `{info['count']}` רכישות, `{info['stars']}` ⭐")
     else:
         lines.append("עדיין לא בוצעו רכישות.")

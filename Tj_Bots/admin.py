@@ -155,6 +155,48 @@ async def _settings_menu_markup():
     ])
 
 
+async def _packages_menu_text_markup():
+    from .pay import get_all_packages
+    packages = await get_all_packages(include_inactive=True)
+    text = "🎟 <b>ניהול חבילות ומחירים</b>\n\nלחץ על חבילה לעריכה:"
+    keyboard = []
+    for key, p in packages.items():
+        icon = '🟢' if p['active'] else '🔴'
+        star = '✨' if p['custom'] else ''
+        keyboard.append([InlineKeyboardButton(f"{icon} {p['label']} {star}", callback_data=f"adm_pkgview_{key}")])
+    keyboard.append([InlineKeyboardButton('➕ הוספת חבילת זמן', callback_data='adm_pkgaddtime'),
+                      InlineKeyboardButton('➕ הוספת חבילת קבצים', callback_data='adm_pkgaddcount')])
+    keyboard.append([InlineKeyboardButton('חזרה ⋟', callback_data='adm_payments_menu', style=enums.ButtonStyle.PRIMARY)])
+    return text, InlineKeyboardMarkup(keyboard)
+
+
+async def _pkg_view_text_markup(key):
+    from .pay import get_all_packages
+    packages = await get_all_packages(include_inactive=True)
+    p = packages.get(key)
+    if not p:
+        return None, None
+    kind_label = 'חבילת זמן (ללא הגבלה)' if p['kind'] == 'time' else 'חבילת קבצים'
+    text = (
+        f"🎟 <b>{p['label']}</b>\n\n"
+        f"<blockquote>"
+        f"סוג: {kind_label}\n"
+        f"מחיר: <b>{p['stars']}</b> כוכבים\n"
+        f"סטטוס: {'🟢 פעילה' if p['active'] else '🔴 כבויה'}\n"
+        f"מקור: {'✨ מותאמת אישית' if p['custom'] else 'ברירת מחדל'}"
+        f"</blockquote>"
+    )
+    toggle_label = '🔴 כבה חבילה' if p['active'] else '🟢 הפעל חבילה'
+    keyboard = [
+        [InlineKeyboardButton('✏️ שנה מחיר', callback_data=f'adm_pkgprice_{key}', style=enums.ButtonStyle.PRIMARY)],
+        [InlineKeyboardButton(toggle_label, callback_data=f'adm_pkgtoggle_{key}', style=enums.ButtonStyle.DANGER if p['active'] else enums.ButtonStyle.SUCCESS)],
+    ]
+    if p['custom']:
+        keyboard.append([InlineKeyboardButton('🗑 מחק חבילה', callback_data=f'adm_pkgdel_{key}_ask', style=enums.ButtonStyle.DANGER)])
+    keyboard.append([InlineKeyboardButton('חזרה לרשימה ⋟', callback_data='adm_packages_menu', style=enums.ButtonStyle.PRIMARY)])
+    return text, InlineKeyboardMarkup(keyboard)
+
+
 async def _payments_menu_markup():
     from .pay import is_payments_enabled, get_free_daily_limit
     enabled = await is_payments_enabled()
@@ -163,6 +205,8 @@ async def _payments_menu_markup():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(pay_label, callback_data='adm_toggle_payments', style=enums.ButtonStyle.SUCCESS if enabled else enums.ButtonStyle.DANGER)],
         [InlineKeyboardButton(f'✏️ קבצים חינמיים ליום: {limit}', callback_data='adm_set_freelimit', style=enums.ButtonStyle.PRIMARY)],
+        [InlineKeyboardButton('🎟 ניהול חבילות ומחירים', callback_data='adm_packages_menu', style=enums.ButtonStyle.PRIMARY)],
+        [InlineKeyboardButton('🔄 איפוס מכסה יומית לכולם', callback_data='adm_resetfree_all_ask', style=enums.ButtonStyle.DANGER)],
         [InlineKeyboardButton('חזרה ⋟', callback_data='adm_settings', style=enums.ButtonStyle.PRIMARY)],
     ])
 
@@ -518,6 +562,61 @@ async def admin_text_input(client, message):
             panel_chat, panel_msg, caption=f"✅ מכסת הקבצים החינמית עודכנה ל-<code>{limit}</code> ליום.", reply_markup=await _payments_menu_markup()
         )
 
+    if action == 'pkg_price':
+        from .pay import set_package_price
+        key = state.get('pkg_key')
+        try:
+            stars = int(text_in)
+            if stars < 1:
+                raise ValueError
+        except ValueError:
+            return await client.edit_message_caption(panel_chat, panel_msg, caption="❌ מחיר לא תקין.", reply_markup=_back_markup(f'adm_pkgview_{key}'))
+        await set_package_price(key, stars)
+        text, markup = await _pkg_view_text_markup(key)
+        return await client.edit_message_caption(panel_chat, panel_msg, caption=f"✅ המחיר עודכן.\n\n{text}", reply_markup=markup)
+
+    if action == 'pkg_add_time':
+        from .pay import add_custom_time_package
+        parts = [p.strip() for p in text_in.split(',')]
+        if len(parts) != 3:
+            return await client.edit_message_caption(panel_chat, panel_msg, caption="❌ פורמט לא תקין. יש לשלוח: שם,שעות (או 'לנצח'),מחיר בכוכבים", reply_markup=_back_markup('adm_packages_menu'))
+        name, hours_str, stars_str = parts
+        try:
+            stars = int(stars_str)
+            if stars < 1:
+                raise ValueError
+        except ValueError:
+            return await client.edit_message_caption(panel_chat, panel_msg, caption="❌ מחיר לא תקין.", reply_markup=_back_markup('adm_packages_menu'))
+        lifetime = hours_str in ('לנצח', 'infinite', 'forever')
+        hours = None
+        if not lifetime:
+            try:
+                hours = float(hours_str)
+                if hours <= 0:
+                    raise ValueError
+            except ValueError:
+                return await client.edit_message_caption(panel_chat, panel_msg, caption="❌ מספר שעות לא תקין.", reply_markup=_back_markup('adm_packages_menu'))
+        await add_custom_time_package(name, stars, hours=hours, lifetime=lifetime)
+        text, markup = await _packages_menu_text_markup()
+        return await client.edit_message_caption(panel_chat, panel_msg, caption=f"✅ החבילה '{name}' נוספה.\n\n{text}", reply_markup=markup)
+
+    if action == 'pkg_add_count':
+        from .pay import add_custom_count_package
+        parts = [p.strip() for p in text_in.split(',')]
+        if len(parts) != 3:
+            return await client.edit_message_caption(panel_chat, panel_msg, caption="❌ פורמט לא תקין. יש לשלוח: שם,כמות קבצים,מחיר בכוכבים", reply_markup=_back_markup('adm_packages_menu'))
+        name, amount_str, stars_str = parts
+        try:
+            amount = int(amount_str)
+            stars = int(stars_str)
+            if amount < 1 or stars < 1:
+                raise ValueError
+        except ValueError:
+            return await client.edit_message_caption(panel_chat, panel_msg, caption="❌ מספרים לא תקינים.", reply_markup=_back_markup('adm_packages_menu'))
+        await add_custom_count_package(name, amount, stars)
+        text, markup = await _packages_menu_text_markup()
+        return await client.edit_message_caption(panel_chat, panel_msg, caption=f"✅ החבילה '{name}' נוספה.\n\n{text}", reply_markup=markup)
+
     if action == 'add_word':
         if not text_in:
             return await client.edit_message_caption(panel_chat, panel_msg, caption="❌ לא נשלחה מילה.", reply_markup=(await _words_menu_text_markup())[1])
@@ -714,6 +813,80 @@ async def admin_callback(client, query):
 
     if data == "adm_set_freelimit":
         return await _start_input(query, "set_freelimit")
+
+    if data == "adm_resetfree_all_ask":
+        async def _do_resetfree_all():
+            today = datetime.now(ISRAEL_TZ).strftime("%Y-%m-%d")
+            count = await db.reset_all_free_usage(today)
+            await query.message.edit_caption(f"✅ המכסה היומית אופסה ל-{count} משתמשים.\n\n💰 <b>מערכת תשלומים</b>\n\nבחר הגדרה:", reply_markup=await _payments_menu_markup())
+
+        async def _cancel_resetfree_all():
+            await query.message.edit_caption("💰 <b>מערכת תשלומים</b>\n\nבחר הגדרה:", reply_markup=await _payments_menu_markup())
+
+        return await _ask_confirm(query, "לאפס את המכסה היומית החינמית לכל המשתמשים בבוט?", _do_resetfree_all, _cancel_resetfree_all)
+
+    if data == "adm_packages_menu":
+        text, markup = await _packages_menu_text_markup()
+        return await query.message.edit_caption(text, reply_markup=markup)
+
+    if data == "adm_pkgaddtime":
+        admin_id = query.from_user.id
+        ADM_INPUT[admin_id] = {'action': 'pkg_add_time', 'panel_chat': query.message.chat.id, 'panel_msg': query.message.id}
+        markup = InlineKeyboardMarkup([[InlineKeyboardButton('❌ ביטול', callback_data='adm_packages_menu')]])
+        text = (
+            "✏️ <b>הוספת חבילת זמן</b>\n\n"
+            "שלח בפורמט: <code>שם החבילה,שעות,מחיר בכוכבים</code>\n"
+            "לחבילת \"לכל החיים\" כתוב 'לנצח' במקום שעות.\n"
+            "לדוגמה: <code>יומיים ללא הגבלה,48,300</code>"
+        )
+        return await query.message.edit_caption(text, reply_markup=markup)
+
+    if data == "adm_pkgaddcount":
+        admin_id = query.from_user.id
+        ADM_INPUT[admin_id] = {'action': 'pkg_add_count', 'panel_chat': query.message.chat.id, 'panel_msg': query.message.id}
+        markup = InlineKeyboardMarkup([[InlineKeyboardButton('❌ ביטול', callback_data='adm_packages_menu')]])
+        text = (
+            "✏️ <b>הוספת חבילת קבצים</b>\n\n"
+            "שלח בפורמט: <code>שם החבילה,כמות קבצים,מחיר בכוכבים</code>\n"
+            "לדוגמה: <code>300 קבצים,300,400</code>"
+        )
+        return await query.message.edit_caption(text, reply_markup=markup)
+
+    if data.startswith("adm_pkgview_"):
+        key = data[len("adm_pkgview_"):]
+        text, markup = await _pkg_view_text_markup(key)
+        if not text:
+            return await query.answer("❌ החבילה לא נמצאה.", show_alert=True)
+        return await query.message.edit_caption(text, reply_markup=markup)
+
+    if data.startswith("adm_pkgprice_"):
+        key = data[len("adm_pkgprice_"):]
+        admin_id = query.from_user.id
+        ADM_INPUT[admin_id] = {'action': 'pkg_price', 'panel_chat': query.message.chat.id, 'panel_msg': query.message.id, 'pkg_key': key}
+        markup = InlineKeyboardMarkup([[InlineKeyboardButton('❌ ביטול', callback_data=f'adm_pkgview_{key}')]])
+        return await query.message.edit_caption("✏️ <b>שינוי מחיר</b>\n\nשלח את המחיר החדש בכוכבים (מספר בלבד).", reply_markup=markup)
+
+    if data.startswith("adm_pkgtoggle_"):
+        from .pay import toggle_package_active
+        key = data[len("adm_pkgtoggle_"):]
+        await toggle_package_active(key)
+        text, markup = await _pkg_view_text_markup(key)
+        return await query.message.edit_caption(text, reply_markup=markup)
+
+    if data.startswith("adm_pkgdel_") and data.endswith("_ask"):
+        key = data[len("adm_pkgdel_"):-len("_ask")]
+
+        async def _do_pkgdel():
+            from .pay import delete_custom_package
+            await delete_custom_package(key)
+            text, markup = await _packages_menu_text_markup()
+            await query.message.edit_caption(text, reply_markup=markup)
+
+        async def _cancel_pkgdel():
+            text, markup = await _pkg_view_text_markup(key)
+            await query.message.edit_caption(text, reply_markup=markup)
+
+        return await _ask_confirm(query, "למחוק את החבילה לצמיתות?", _do_pkgdel, _cancel_pkgdel)
 
     if data == "adm_words_menu":
         text, markup = await _words_menu_text_markup()
