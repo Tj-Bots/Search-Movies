@@ -1,10 +1,11 @@
 
 import asyncio
+from urllib.parse import quote
 from pyrogram import Client, filters, enums
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, InputMediaPhoto
 from config import UPDATE_CHANNEL, REQUEST_GROUP, PHOTO_URL, ADMINS, LOG_CHANNEL, AUTH_CHANNEL_FORCE
 from database import db
-from .utils import get_readable_size
+from .utils import get_readable_size, resolve_update_channel
 from .pay import check_quota, consume_search, out_of_quota_markup, denial_text
 
 async def send_file_with_fallback(client, chat_id, file_data, reply_to_id=None):
@@ -51,7 +52,7 @@ async def start_command(client, message):
     if message.chat.type == enums.ChatType.PRIVATE:
         user_id = message.from_user.id
         
-        if len(message.command) > 1:
+        if len(message.command) > 1 and not message.command[1].startswith("r_"):
             file_db_id = message.command[1]
 
             if file_db_id == "buy":
@@ -60,16 +61,17 @@ async def start_command(client, message):
 
             should_check = await db.get_config('auth_force', AUTH_CHANNEL_FORCE)
             update_channel = await db.get_config('update_channel', UPDATE_CHANNEL)
+            check_id, join_url = resolve_update_channel(update_channel)
             is_subbed = True
 
             if should_check:
                 try:
-                    await client.get_chat_member(update_channel, user_id)
+                    await client.get_chat_member(check_id, user_id)
                 except:
                     is_subbed = False
 
             if not is_subbed:
-                btn = [[InlineKeyboardButton('📣 להרשמה לערוץ', url=f'https://t.me/{update_channel}')],
+                btn = [[InlineKeyboardButton('📣 להרשמה לערוץ', url=join_url)],
                        [InlineKeyboardButton('↻ נסה שוב', callback_data=f"checksub_{file_db_id}")]]
                 
                 return await message.reply_text(
@@ -214,12 +216,17 @@ async def callback_handler(client, query: CallbackQuery):
         bot_username = client.me.username
         ref_link = f"https://t.me/{bot_username}?start=r_{user_id}"
         ref_count = await db.get_referral_count(user_id)
-        share_url = f"https://t.me/share/url?url={ref_link}&text=בואו לחפש סרטים וסדרות בבוט הזה!"
+        ratio = await db.get_config('referral_ratio', 3)
+        bonus = ref_count // ratio if ratio > 0 else 0
+        remaining = (ratio - (ref_count % ratio)) if ratio > 0 else 0
+        share_url = f"https://t.me/share/url?url={quote(ref_link, safe='')}&text={quote('בואו לחפש סרטים וסדרות בבוט הזה!')}"
         txt = (
             "🔗 <b>הזמן חברים וקבל בונוס</b>\n\n"
-            "כל משתמש חדש שיצטרף לבוט דרך הקישור האישי שלך מעניק לך <b>+1 קובץ חינמי קבוע בכל יום, לתמיד</b>.\n\n"
+            f"על כל <b>{ratio}</b> משתמשים חדשים שיצטרפו דרך הקישור האישי שלך, תקבל <b>+1 קובץ חינמי קבוע בכל יום, לתמיד</b>.\n\n"
             f"<blockquote><code>{ref_link}</code></blockquote>\n\n"
-            f"👥 הצטרפו עד כה דרכך: <b>{ref_count}</b> משתמשים"
+            f"👥 הצטרפו עד כה דרכך: <b>{ref_count}</b> משתמשים\n"
+            f"🎁 בונוס נוכחי: <b>+{bonus}</b> קבצים ליום\n"
+            f"⏳ עוד <b>{remaining}</b> הזמנות לבונוס הבא"
         )
         btns = [
             [InlineKeyboardButton('↗️ שתף את הקישור', url=share_url, style=enums.ButtonStyle.SUCCESS)],

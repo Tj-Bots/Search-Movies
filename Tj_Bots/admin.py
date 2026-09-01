@@ -30,7 +30,7 @@ PERMISSIONS_CATALOG = {
     ]},
     'perm_groups': {'label': '💬 קבוצות', 'prefixes': ['adm_groups', 'adm_groupview', 'adm_gleave', 'adm_gadmins', 'adm_gdemote', 'adm_gpromote', 'adm_searchpage_']},
     'perm_settings': {'label': '⚙️ הגדרות מערכת', 'prefixes': ['adm_settings', 'adm_toggle_lock', 'adm_toggle_auth', 'adm_set_channel', 'adm_words']},
-    'perm_payments': {'label': '💰 מערכת תשלומים', 'prefixes': ['adm_payments', 'adm_toggle_payments', 'adm_set_freelimit', 'adm_packages', 'adm_pkg', 'adm_resetfree_all']},
+    'perm_payments': {'label': '💰 מערכת תשלומים', 'prefixes': ['adm_payments', 'adm_toggle_payments', 'adm_set_freelimit', 'adm_set_refratio', 'adm_packages', 'adm_pkg', 'adm_resetfree_all']},
     'perm_stats': {'label': '📊 סטטיסטיקות', 'prefixes': ['adm_stats']},
     'perm_popular': {'label': '🔥 חיפושים פופולריים', 'prefixes': ['adm_popular']},
     'perm_load': {'label': '📈 מד עומס שרת', 'prefixes': ['adm_load']},
@@ -82,6 +82,7 @@ PROMPTS = {
     'watch_channel': {'label': 'הוספת ערוץ למעקב', 'prompt': "שלח את מזהה (ID) הערוץ להוספה למעקב.\nלדוגמה: <code>-1001234567890</code>", 'back': 'channels'},
     'start_index': {'label': 'התחלת אינדוקס', 'prompt': "שלח קישור לערוץ (ואפשר טווח התחלה), בדיוק כמו בפקודת /index.\nלדוגמה: <code>https://t.me/c/1234/1000</code>\nאו: <code>https://t.me/c/1234/1000 - 500</code>", 'back': 'channels'},
     'set_freelimit': {'label': 'קביעת מכסת קבצים חינמית ליום', 'prompt': "שלח כמה קבצים חינמיים לאפשר ליום (מספר בלבד).\nלדוגמה: <code>7</code>", 'back': 'payments'},
+    'set_refratio': {'label': 'קביעת יחס הזמנות לבונוס', 'prompt': "שלח כמה הזמנות נדרשות עבור קובץ בונוס אחד ליום (מספר בלבד).\nלדוגמה: <code>3</code>", 'back': 'payments'},
 }
 
 USER_PROMPTS = {
@@ -271,9 +272,11 @@ async def _payments_menu_markup():
     enabled = await is_payments_enabled()
     limit = await get_free_daily_limit()
     pay_label = '💰 תשלומים בכוכבים: מופעל' if enabled else '🆓 תשלומים בכוכבים: כבוי (הכל חינם וללא הגבלה)'
+    ratio = await db.get_config('referral_ratio', 3)
     return InlineKeyboardMarkup([
         [InlineKeyboardButton(pay_label, callback_data='adm_toggle_payments', style=enums.ButtonStyle.SUCCESS if enabled else enums.ButtonStyle.DANGER)],
         [InlineKeyboardButton(f'✏️ קבצים חינמיים ליום: {limit}', callback_data='adm_set_freelimit', style=enums.ButtonStyle.PRIMARY)],
+        [InlineKeyboardButton(f'🔗 יחס הזמנות לבונוס: {ratio}', callback_data='adm_set_refratio', style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('🎟 ניהול חבילות ומחירים', callback_data='adm_packages_menu', style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('🔄 איפוס מכסה יומית לכולם', callback_data='adm_resetfree_all_ask', style=enums.ButtonStyle.DANGER)],
         [InlineKeyboardButton('חזרה ⋟', callback_data='adm_settings', style=enums.ButtonStyle.PRIMARY)],
@@ -507,7 +510,7 @@ MODERATOR_PRIVILEGES = ChatPrivileges(
 async def _render_group_admins(client, chat_id, page):
     try:
         admins = []
-        async for m in await client.get_chat_members(chat_id, filter=enums.ChatMembersFilter.ADMINISTRATORS):
+        async for m in client.get_chat_members(chat_id, filter=enums.ChatMembersFilter.ADMINISTRATORS):
             admins.append(m)
     except Exception as e:
         return f"❌ לא ניתן לקבל את רשימת המנהלים: {e}", _back_markup(f'adm_groupview_{chat_id}_{page}')
@@ -679,6 +682,18 @@ async def admin_text_input(client, message):
         await db.set_config('free_daily_limit', limit)
         return await client.edit_message_caption(
             panel_chat, panel_msg, caption=f"✅ מכסת הקבצים החינמית עודכנה ל-<code>{limit}</code> ליום.", reply_markup=await _payments_menu_markup()
+        )
+
+    if action == 'set_refratio':
+        try:
+            ratio = int(text_in)
+            if ratio < 1:
+                raise ValueError
+        except ValueError:
+            return await client.edit_message_caption(panel_chat, panel_msg, caption="❌ מספר לא תקין.", reply_markup=await _payments_menu_markup())
+        await db.set_config('referral_ratio', ratio)
+        return await client.edit_message_caption(
+            panel_chat, panel_msg, caption=f"✅ יחס ההזמנות עודכן: <code>{ratio}</code> הזמנות לקובץ בונוס אחד ליום.", reply_markup=await _payments_menu_markup()
         )
 
     if action == 'gpromote':
@@ -1097,6 +1112,9 @@ async def admin_callback(client, query):
 
     if data == "adm_set_freelimit":
         return await _start_input(query, "set_freelimit")
+
+    if data == "adm_set_refratio":
+        return await _start_input(query, "set_refratio")
 
     if data == "adm_resetfree_all_ask":
         async def _do_resetfree_all():

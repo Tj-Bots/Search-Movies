@@ -22,11 +22,14 @@ async def global_logger(client, message):
                     referrer_id = int(parts[1][len("r_"):])
                     if referrer_id != user_id:
                         await db.set_referred_by(user_id, referrer_id)
-                        await db.add_referral_bonus(referrer_id, 1)
                         try:
+                            ref_count = await db.get_referral_count(referrer_id)
+                            ratio = await db.get_config('referral_ratio', 3)
+                            remaining = (ratio - (ref_count % ratio)) if ratio > 0 else 0
+                            hint = "🎁 קיבלת קובץ חינמי קבוע נוסף ליום!" if remaining == ratio else f"⏳ עוד {remaining} הזמנות לבונוס הבא."
                             await client.send_message(
                                 referrer_id,
-                                "🎉 <b>משתמש חדש הצטרף דרך קישור ההזמנה שלך!</b>\nקיבלת <b>+1</b> קובץ חינמי קבוע בכל יום, לתמיד."
+                                f"🎉 <b>משתמש חדש הצטרף דרך קישור ההזמנה שלך!</b> (סה'כ: {ref_count})\n{hint}"
                             )
                         except Exception:
                             pass

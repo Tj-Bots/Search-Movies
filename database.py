@@ -180,16 +180,17 @@ class Database:
 
     async def get_search_quota(self, user_id):
         user = await self.users.find_one({'_id': user_id}) or {}
+        ref_count = await self.get_referral_count(user_id)
+        ratio = await self.get_config('referral_ratio', 3)
+        extra_daily_limit = (ref_count // ratio) if ratio > 0 else 0
         return {
             'free_used': user.get('free_used', 0),
             'free_date': user.get('free_date', ''),
             'search_credits': user.get('search_credits', 0),
             'unlimited_until': user.get('unlimited_until', 0),
-            'extra_daily_limit': user.get('extra_daily_limit', 0),
+            'extra_daily_limit': extra_daily_limit,
+            'referral_count': ref_count,
         }
-
-    async def add_referral_bonus(self, user_id, amount=1):
-        await self.users.update_one({'_id': user_id}, {'$inc': {'extra_daily_limit': amount}}, upsert=True)
 
     async def get_referral_count(self, user_id):
         return await self.users.count_documents({'referred_by': user_id})
