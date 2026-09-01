@@ -195,7 +195,7 @@ async def check_quota(user_id):
 
     today = _today_str()
     free_used = quota['free_used'] if quota['free_date'] == today else 0
-    limit = await get_free_daily_limit()
+    limit = await get_free_daily_limit() + quota['extra_daily_limit']
     if free_used < limit:
         return True
 
@@ -222,7 +222,7 @@ async def consume_search(user_id):
     if quota['unlimited_until'] > time.time():
         return
 
-    limit = await get_free_daily_limit()
+    limit = await get_free_daily_limit() + quota['extra_daily_limit']
     if quota['free_used'] < limit:
         await db.increment_free_usage(user_id)
         return
@@ -260,13 +260,17 @@ async def _status_block(user_id):
     if not await is_payments_enabled():
         return "<blockquote>🆓 <b>הבוט פתוח לגמרי בחינם וללא הגבלה כרגע.</b></blockquote>"
 
-    limit = await get_free_daily_limit()
+    limit = await get_free_daily_limit() + quota['extra_daily_limit']
     free_left = max(limit - used_today, 0)
     now = time.time()
 
+    limit_line = f"נוצלו: <b>{used_today}</b> מתוך <b>{limit}</b> (נשארו: <b>{free_left}</b>)"
+    if quota['extra_daily_limit']:
+        limit_line += f"\n🔗 כולל <b>+{quota['extra_daily_limit']}</b> קבוע מהזמנות"
+
     lines = [
         "🆓 <b>קבצים חינמיים</b>",
-        f"נוצלו: <b>{used_today}</b> מתוך <b>{limit}</b> (נשארו: <b>{free_left}</b>)",
+        limit_line,
         f"⏳ מתאפס בעוד: <b>{_time_until_reset()}</b>",
         "",
         "💳 <b>קבצים בתשלום</b>",

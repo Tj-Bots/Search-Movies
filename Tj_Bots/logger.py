@@ -11,7 +11,28 @@ async def global_logger(client, message):
         first_name = message.from_user.first_name or "Unknown"
         
         is_new = await db.add_user(user_id, first_name)
-        
+
+        # Referral bonus is granted here (not in start.py) because this handler runs in
+        # group=-1, before start.py's group=0 handler even sees the update - by then
+        # add_user() above has already made this user look "existing" to any later check.
+        if is_new and message.text and message.text.startswith("/start"):
+            parts = message.text.split(maxsplit=1)
+            if len(parts) > 1 and parts[1].startswith("r_"):
+                try:
+                    referrer_id = int(parts[1][len("r_"):])
+                    if referrer_id != user_id:
+                        await db.set_referred_by(user_id, referrer_id)
+                        await db.add_referral_bonus(referrer_id, 1)
+                        try:
+                            await client.send_message(
+                                referrer_id,
+                                "🎉 <b>משתמש חדש הצטרף דרך קישור ההזמנה שלך!</b>\nקיבלת <b>+1</b> קובץ חינמי קבוע בכל יום, לתמיד."
+                            )
+                        except Exception:
+                            pass
+                except ValueError:
+                    pass
+
         if is_new:
             try:
                 log_text = (

@@ -138,6 +138,7 @@ async def send_home_message(client, message, user=None, is_edit=False):
         [InlineKeyboardButton('〄 עזרה 〄', callback_data='help', style=enums.ButtonStyle.PRIMARY),
          InlineKeyboardButton('⍟ אודות ⍟', callback_data='about', style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('🔎 קניית קבצים 🔎', callback_data='pay_menu', style=enums.ButtonStyle.SUCCESS)],
+        [InlineKeyboardButton('🔗 הזמן חברים וקבל בונוס', callback_data='referral_menu', style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('📨 פנייה לתמיכה', callback_data='support_start', style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('⇋ להוספה לקבוצה ⇋', url=f"http://t.me/{client.me.username}?startgroup&admin=delete_messages", style=enums.ButtonStyle.PRIMARY)]
     ]
@@ -208,7 +209,24 @@ async def callback_handler(client, query: CallbackQuery):
     
     if data == "home":
         await send_home_message(client, query.message, user=query.from_user, is_edit=True)
-    
+
+    elif data == "referral_menu":
+        bot_username = client.me.username
+        ref_link = f"https://t.me/{bot_username}?start=r_{user_id}"
+        ref_count = await db.get_referral_count(user_id)
+        share_url = f"https://t.me/share/url?url={ref_link}&text=בואו לחפש סרטים וסדרות בבוט הזה!"
+        txt = (
+            "🔗 <b>הזמן חברים וקבל בונוס</b>\n\n"
+            "כל משתמש חדש שיצטרף לבוט דרך הקישור האישי שלך מעניק לך <b>+1 קובץ חינמי קבוע בכל יום, לתמיד</b>.\n\n"
+            f"<blockquote><code>{ref_link}</code></blockquote>\n\n"
+            f"👥 הצטרפו עד כה דרכך: <b>{ref_count}</b> משתמשים"
+        )
+        btns = [
+            [InlineKeyboardButton('↗️ שתף את הקישור', url=share_url, style=enums.ButtonStyle.SUCCESS)],
+            [InlineKeyboardButton('🏠 חזרה לבית', callback_data='home', style=enums.ButtonStyle.PRIMARY)],
+        ]
+        await query.message.edit_media(InputMediaPhoto(PHOTO_URL, caption=txt), reply_markup=InlineKeyboardMarkup(btns))
+
     elif data == "help":
         user_mention = query.from_user.mention
         

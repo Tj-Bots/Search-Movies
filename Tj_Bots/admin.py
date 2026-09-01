@@ -271,7 +271,8 @@ async def _render_user_info(user_id):
         return f"❌ המשתמש <code>{user_id}</code> לא נמצא במסד הנתונים."
 
     quota = await db.get_search_quota(user_id)
-    daily_limit = await get_free_daily_limit()
+    daily_limit = await get_free_daily_limit() + quota['extra_daily_limit']
+    ref_count = await db.get_referral_count(user_id)
     ban_info = await db.get_ban_status(user_id)
     now = time.time()
 
@@ -296,6 +297,7 @@ async def _render_user_info(user_id):
         f"⏰ מנוי זמן ללא הגבלה: <b>{unlimited_line}</b>\n"
         f"💳 יתרת קבצים (בנק): <b>{quota['search_credits']}</b>\n"
         f"🆓 קבצים חינמיים היום: <b>{free_used}/{daily_limit}</b>\n"
+        f"🔗 הזמנות: <b>{ref_count}</b> (בונוס: <b>+{quota['extra_daily_limit']}</b> ליום)\n"
         f"🚦 סטטוס חסימה: {ban_line}\n"
         f"⚠️ כמות עבירות (חיפושים אסורים): <b>{user.get('blocked_attempts', 0)}</b>"
         "</blockquote>"

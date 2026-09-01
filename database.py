@@ -183,7 +183,17 @@ class Database:
             'free_date': user.get('free_date', ''),
             'search_credits': user.get('search_credits', 0),
             'unlimited_until': user.get('unlimited_until', 0),
+            'extra_daily_limit': user.get('extra_daily_limit', 0),
         }
+
+    async def add_referral_bonus(self, user_id, amount=1):
+        await self.users.update_one({'_id': user_id}, {'$inc': {'extra_daily_limit': amount}}, upsert=True)
+
+    async def get_referral_count(self, user_id):
+        return await self.users.count_documents({'referred_by': user_id})
+
+    async def set_referred_by(self, user_id, referrer_id):
+        await self.users.update_one({'_id': user_id}, {'$set': {'referred_by': referrer_id}}, upsert=True)
 
     async def reset_free_usage(self, user_id, today):
         await self.users.update_one({'_id': user_id}, {'$set': {'free_used': 0, 'free_date': today}}, upsert=True)
