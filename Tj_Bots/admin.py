@@ -3,7 +3,7 @@ import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from pyrogram import Client, filters, enums
-from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto, ChatPrivileges
 from config import ADMINS, PHOTO_URL, AUTH_CHANNEL_FORCE
 from database import db
 
@@ -409,8 +409,39 @@ def _group_actions_markup(chat_id, page, is_banned):
     )
     return InlineKeyboardMarkup([
         [ban_btn, InlineKeyboardButton('🚪 עזוב קבוצה', callback_data=f'adm_gleave_{chat_id}_{page}', style=enums.ButtonStyle.DANGER)],
+        [InlineKeyboardButton('👥 ניהול מנהלים', callback_data=f'adm_gadmins_{chat_id}_{page}', style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('חזרה לרשימה ⋟', callback_data=f'adm_groups_{page}', style=enums.ButtonStyle.PRIMARY)],
     ])
+
+
+MODERATOR_PRIVILEGES = ChatPrivileges(
+    can_manage_chat=True, can_delete_messages=True, can_restrict_members=True,
+    can_invite_users=True, can_pin_messages=True, can_manage_video_chats=True,
+)
+
+
+async def _render_group_admins(client, chat_id, page):
+    try:
+        admins = []
+        async for m in await client.get_chat_members(chat_id, filter=enums.ChatMembersFilter.ADMINISTRATORS):
+            admins.append(m)
+    except Exception as e:
+        return f"❌ לא ניתן לקבל את רשימת המנהלים: {e}", _back_markup(f'adm_groupview_{chat_id}_{page}')
+
+    keyboard = []
+    for m in admins:
+        if m.user.is_bot:
+            continue
+        name = m.user.first_name or str(m.user.id)
+        if m.status == enums.ChatMemberStatus.OWNER:
+            keyboard.append([InlineKeyboardButton(f"👑 {name} (יוצר הקבוצה)", callback_data='noop')])
+        else:
+            keyboard.append([InlineKeyboardButton(f"❌ הורד מניהול: {name}", callback_data=f'adm_gdemote_{chat_id}_{m.user.id}_{page}_ask', style=enums.ButtonStyle.DANGER)])
+
+    keyboard.append([InlineKeyboardButton('➕ מנה מנהל חדש', callback_data=f'adm_gpromote_{chat_id}_{page}', style=enums.ButtonStyle.SUCCESS)])
+    keyboard.append([InlineKeyboardButton('חזרה לקבוצה ⋟', callback_data=f'adm_groupview_{chat_id}_{page}', style=enums.ButtonStyle.PRIMARY)])
+    text = "👥 <b>מנהלי הקבוצה</b>\n\nלחץ להורדה מניהול, או הוסף מנהל חדש:"
+    return text, InlineKeyboardMarkup(keyboard)
 
 
 # ---------- name/id search results (paginated) ----------
@@ -563,6 +594,21 @@ async def admin_text_input(client, message):
         return await client.edit_message_caption(
             panel_chat, panel_msg, caption=f"✅ מכסת הקבצים החינמית עודכנה ל-<code>{limit}</code> ליום.", reply_markup=await _payments_menu_markup()
         )
+
+    if action == 'gpromote':
+        chat_id = state['chat_id']
+        page = state['back_page']
+        try:
+            target_uid = int(text_in)
+        except ValueError:
+            return await client.edit_message_caption(panel_chat, panel_msg, caption="❌ מזהה לא תקין.", reply_markup=_back_markup(f'adm_gadmins_{chat_id}_{page}'))
+        try:
+            await client.promote_chat_member(chat_id, target_uid, privileges=MODERATOR_PRIVILEGES)
+            note = f"✅ המשתמש <code>{target_uid}</code> מונה למנהל בקבוצה."
+        except Exception as e:
+            note = f"❌ שגיאה: {e}"
+        text, markup = await _render_group_admins(client, chat_id, page)
+        return await client.edit_message_caption(panel_chat, panel_msg, caption=f"{note}\n\n{text}", reply_markup=markup)
 
     if action == 'pkg_price':
         from .pay import set_package_price
@@ -1070,6 +1116,42 @@ async def admin_callback(client, query):
             await query.message.edit_caption(text, reply_markup=markup)
 
         return await _ask_confirm(query, "הבוט יעזוב את הקבוצה ויידרש להזמין אותו מחדש כדי לחזור. להמשיך?", _do_gleave, _cancel_gleave)
+
+    if data.startswith("adm_gadmins_"):
+        chat_id_str, _, page_str = data[len("adm_gadmins_"):].partition('_')
+        chat_id = int(chat_id_str)
+        page = int(page_str) if page_str.isdigit() else 1
+        text, markup = await _render_group_admins(client, chat_id, page)
+        return await query.message.edit_caption(text, reply_markup=markup)
+
+    if data.startswith("adm_gdemote_") and data.endswith("_ask"):
+        parts = data[len("adm_gdemote_"):-len("_ask")].split('_')
+        chat_id, target_uid = int(parts[0]), int(parts[1])
+        page = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else 1
+
+        async def _do_gdemote():
+            try:
+                await client.promote_chat_member(chat_id, target_uid, privileges=ChatPrivileges(can_manage_chat=False))
+                note = "✅ המשתמש הורד מניהול."
+            except Exception as e:
+                note = f"❌ שגיאה: {e}"
+            text, markup = await _render_group_admins(client, chat_id, page)
+            await query.message.edit_caption(f"{note}\n\n{text}", reply_markup=markup)
+
+        async def _cancel_gdemote():
+            text, markup = await _render_group_admins(client, chat_id, page)
+            await query.message.edit_caption(text, reply_markup=markup)
+
+        return await _ask_confirm(query, "להוריד את המשתמש מניהול הקבוצה?", _do_gdemote, _cancel_gdemote)
+
+    if data.startswith("adm_gpromote_"):
+        chat_id_str, _, page_str = data[len("adm_gpromote_"):].partition('_')
+        chat_id = int(chat_id_str)
+        page = int(page_str) if page_str.isdigit() else 1
+        admin_id = query.from_user.id
+        ADM_INPUT[admin_id] = {'action': 'gpromote', 'panel_chat': query.message.chat.id, 'panel_msg': query.message.id, 'chat_id': chat_id, 'back_page': page}
+        markup = InlineKeyboardMarkup([[InlineKeyboardButton('❌ ביטול', callback_data=f'adm_gadmins_{chat_id}_{page}')]])
+        return await query.message.edit_caption("✏️ <b>מינוי מנהל חדש</b>\n\nשלח את מזהה המשתמש (ID) שברצונך למנות למנהל בקבוצה.\nהמשתמש חייב להיות חבר בקבוצה.", reply_markup=markup)
 
     if data.startswith("adm_groups_"):
         try:
