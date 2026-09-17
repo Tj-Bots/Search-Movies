@@ -46,18 +46,22 @@ class Database:
 
     async def add_user(self, user_id, first_name):
         if self.users is None: return False
+        now = time.time()
         user = await self.users.find_one({'_id': user_id})
         if not user:
-            await self.users.insert_one({'_id': user_id, 'first_name': first_name})
+            await self.users.insert_one({'_id': user_id, 'first_name': first_name, 'joined_at': now, 'last_active': now})
             return True
+        await self.users.update_one({'_id': user_id}, {'$set': {'first_name': first_name, 'last_active': now}})
         return False
 
     async def add_group(self, chat_id, title):
         if self.groups is None: return False
+        now = time.time()
         group = await self.groups.find_one({'_id': chat_id})
         if not group:
-            await self.groups.insert_one({'_id': chat_id, 'title': title})
+            await self.groups.insert_one({'_id': chat_id, 'title': title, 'joined_at': now, 'last_active': now})
             return True
+        await self.groups.update_one({'_id': chat_id}, {'$set': {'title': title, 'last_active': now}})
         return False
 
     async def get_all_users(self):
@@ -303,9 +307,10 @@ class Database:
         if self.search_log is None: return
         await self.search_log.delete_many({})
 
-    async def get_users_page(self, page, per_page=10):
+    async def get_users_page(self, page, per_page=10, sort_by='joined'):
         skip = (page - 1) * per_page
-        cursor = self.users.find({}).sort('_id', 1).skip(skip).limit(per_page)
+        sort_field = 'last_active' if sort_by == 'active' else 'joined_at'
+        cursor = self.users.find({}).sort(sort_field, -1).skip(skip).limit(per_page)
         users = await cursor.to_list(length=per_page)
         total = await self.users.count_documents({})
         return users, total
@@ -318,9 +323,10 @@ class Database:
         cursor = self.users.find({'first_name': regex}).limit(limit)
         return await cursor.to_list(length=limit)
 
-    async def get_groups_page(self, page, per_page=10):
+    async def get_groups_page(self, page, per_page=10, sort_by='joined'):
         skip = (page - 1) * per_page
-        cursor = self.groups.find({}).sort('_id', 1).skip(skip).limit(per_page)
+        sort_field = 'last_active' if sort_by == 'active' else 'joined_at'
+        cursor = self.groups.find({}).sort(sort_field, -1).skip(skip).limit(per_page)
         groups = await cursor.to_list(length=per_page)
         total = await self.groups.count_documents({})
         return groups, total

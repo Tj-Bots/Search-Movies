@@ -11,6 +11,8 @@ ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
 
 ADM_INPUT = {}
 ADM_SEARCH = {}
+USER_LIST_SORT = {}
+GROUP_LIST_SORT = {}
 SUBADMIN_WIZARD = {}
 USERS_PER_PAGE = 10
 
@@ -497,13 +499,17 @@ async def _start_user_action(query, action, user_id, page, return_to='info'):
     await query.message.edit_caption(text, reply_markup=markup)
 
 
-async def _users_page_text_markup(page):
-    users, total = await db.get_users_page(page, USERS_PER_PAGE)
+async def _users_page_text_markup(page, admin_id=None):
+    sort_by = USER_LIST_SORT.get(admin_id, 'joined')
+    users, total = await db.get_users_page(page, USERS_PER_PAGE, sort_by=sort_by)
     total_pages = max((total + USERS_PER_PAGE - 1) // USERS_PER_PAGE, 1)
 
     text = f"👥 <b>משתמשים ({total})</b>\n\nבחר משתמש לצפייה בפרטים:"
 
-    keyboard = [
+    sort_label = '📅 מיון: הצטרפות' if sort_by == 'joined' else '🕐 מיון: פעילות אחרונה'
+    keyboard = [[InlineKeyboardButton(sort_label, callback_data='adm_users_sorttoggle', style=enums.ButtonStyle.PRIMARY)]]
+
+    keyboard += [
         [InlineKeyboardButton(f"👤 {u.get('first_name', 'Unknown')} — {u['_id']}", callback_data=f"adm_userview_{u['_id']}_{page}")]
         for u in users
     ] or [[InlineKeyboardButton('אין משתמשים', callback_data='noop')]]
@@ -632,13 +638,17 @@ def _search_results_text_markup(admin_id, page):
     return text, InlineKeyboardMarkup(keyboard)
 
 
-async def _groups_page_text_markup(page):
-    groups, total = await db.get_groups_page(page, USERS_PER_PAGE)
+async def _groups_page_text_markup(page, admin_id=None):
+    sort_by = GROUP_LIST_SORT.get(admin_id, 'joined')
+    groups, total = await db.get_groups_page(page, USERS_PER_PAGE, sort_by=sort_by)
     total_pages = max((total + USERS_PER_PAGE - 1) // USERS_PER_PAGE, 1)
 
     text = f"💬 <b>קבוצות ({total})</b>\n\nבחר קבוצה לצפייה בפרטים:"
 
-    keyboard = [
+    sort_label = '📅 מיון: הצטרפות' if sort_by == 'joined' else '🕐 מיון: פעילות אחרונה'
+    keyboard = [[InlineKeyboardButton(sort_label, callback_data='adm_groups_sorttoggle', style=enums.ButtonStyle.PRIMARY)]]
+
+    keyboard += [
         [InlineKeyboardButton(f"💬 {g.get('title', 'Unknown')} — {g['_id']}", callback_data=f"adm_groupview_{g['_id']}_{page}")]
         for g in groups
     ] or [[InlineKeyboardButton('אין קבוצות', callback_data='noop')]]
@@ -1363,6 +1373,16 @@ async def admin_callback(client, query):
     if data == "adm_users_search":
         return await _start_input(query, "find_user")
 
+    if data == "adm_users_sorttoggle":
+        USER_LIST_SORT[admin_id] = 'active' if USER_LIST_SORT.get(admin_id, 'joined') == 'joined' else 'joined'
+        text, markup = await _users_page_text_markup(1, admin_id)
+        return await query.message.edit_caption(text, reply_markup=markup)
+
+    if data == "adm_groups_sorttoggle":
+        GROUP_LIST_SORT[admin_id] = 'active' if GROUP_LIST_SORT.get(admin_id, 'joined') == 'joined' else 'joined'
+        text, markup = await _groups_page_text_markup(1, admin_id)
+        return await query.message.edit_caption(text, reply_markup=markup)
+
     if data.startswith("adm_searchpage_"):
         page = int(data[len("adm_searchpage_"):])
         text, markup = _search_results_text_markup(admin_id, page)
@@ -1464,7 +1484,7 @@ async def admin_callback(client, query):
             page = int(data[len("adm_users_"):])
         except ValueError:
             page = 1
-        text, markup = await _users_page_text_markup(page)
+        text, markup = await _users_page_text_markup(page, admin_id)
         return await query.message.edit_caption(text, reply_markup=markup)
 
     if data == "adm_groups_search":
@@ -1522,11 +1542,11 @@ async def admin_callback(client, query):
                 note = "✅ הבוט עזב את הקבוצה והוסרה מהרשימה."
             except Exception as e:
                 note = f"❌ שגיאה: {e}"
-            text, markup = await _groups_page_text_markup(page)
+            text, markup = await _groups_page_text_markup(page, admin_id)
             await query.message.edit_caption(f"{note}\n\n{text}", reply_markup=markup)
 
         async def _cancel_gleave():
-            text, markup = await _groups_page_text_markup(page)
+            text, markup = await _groups_page_text_markup(page, admin_id)
             await query.message.edit_caption(text, reply_markup=markup)
 
         return await _ask_confirm(query, "הבוט יעזוב את הקבוצה ויידרש להזמין אותו מחדש כדי לחזור. להמשיך?", _do_gleave, _cancel_gleave)
@@ -1572,7 +1592,7 @@ async def admin_callback(client, query):
             page = int(data[len("adm_groups_"):])
         except ValueError:
             page = 1
-        text, markup = await _groups_page_text_markup(page)
+        text, markup = await _groups_page_text_markup(page, admin_id)
         return await query.message.edit_caption(text, reply_markup=markup)
 
     if data == "adm_channels_menu":
