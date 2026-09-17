@@ -357,14 +357,18 @@ class Database:
         cursor = self.user_search_log.find({'user_id': user_id}).sort('ts', -1).limit(limit)
         return await cursor.to_list(length=limit)
 
-    async def save_support_thread(self, admin_chat_id, message_id, user_id):
+    async def save_support_thread(self, admin_chat_id, message_id, user_id, reply_to_id=None):
         await self.support_threads.update_one(
-            {'_id': f"{admin_chat_id}:{message_id}"}, {'$set': {'user_id': user_id, 'ts': time.time()}}, upsert=True
+            {'_id': f"{admin_chat_id}:{message_id}"},
+            {'$set': {'user_id': user_id, 'reply_to_id': reply_to_id, 'ts': time.time()}},
+            upsert=True
         )
 
     async def get_support_thread(self, admin_chat_id, message_id):
         doc = await self.support_threads.find_one({'_id': f"{admin_chat_id}:{message_id}"})
-        return doc['user_id'] if doc else None
+        if not doc:
+            return None, None
+        return doc['user_id'], doc.get('reply_to_id')
 
     async def save_continue_marker(self, user_id, message_id):
         await self.support_threads.update_one(

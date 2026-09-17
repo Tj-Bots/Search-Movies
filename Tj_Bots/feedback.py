@@ -38,9 +38,9 @@ async def _relay_to_admins(client, message, user_id):
 
     for admin_id in ADMINS:
         try:
-            await message.forward(admin_id)
-            info_msg = await client.send_message(admin_id, info_text, reply_markup=profile_btn)
-            await db.save_support_thread(admin_id, info_msg.id, user_id)
+            fwd_msg = await message.forward(admin_id)
+            info_msg = await client.send_message(admin_id, info_text, reply_markup=profile_btn, reply_to_message_id=fwd_msg.id)
+            await db.save_support_thread(admin_id, info_msg.id, user_id, reply_to_id=message.id)
         except Exception:
             pass
 
@@ -55,11 +55,6 @@ async def support_capture(client, message):
     state = AWAITING_FEEDBACK.pop(user_id, None)
 
     await _relay_to_admins(client, message, user_id)
-
-    try:
-        await message.delete()
-    except Exception:
-        pass
 
     if state:
         try:
@@ -76,12 +71,15 @@ async def support_capture(client, message):
 @Client.on_message(filters.user(ADMINS) & filters.private & filters.reply)
 async def support_admin_reply(client, message):
     replied = message.reply_to_message
-    user_id = await db.get_support_thread(message.chat.id, replied.id) if replied else None
+    user_id, reply_to_id = await db.get_support_thread(message.chat.id, replied.id) if replied else (None, None)
     if not user_id:
         raise ContinuePropagation
 
     try:
-        sent = await message.copy(user_id)
+        try:
+            sent = await message.copy(user_id, reply_to_message_id=reply_to_id)
+        except Exception:
+            sent = await message.copy(user_id)
         hint = await client.send_message(user_id, CONTINUE_HINT, reply_to_message_id=sent.id)
         await db.save_continue_marker(user_id, sent.id)
         await db.save_continue_marker(user_id, hint.id)
