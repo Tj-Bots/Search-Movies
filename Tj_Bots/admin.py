@@ -1,10 +1,11 @@
 import asyncio
 import time
+import uuid
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from pyrogram import Client, filters, enums
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto, ChatPrivileges
-from config import ADMINS, PHOTO_URL, AUTH_CHANNEL_FORCE, UPDATE_CHANNEL
+from config import ADMINS, PHOTO_URL, AUTH_CHANNEL_FORCE
 from database import db
 
 ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
@@ -13,6 +14,7 @@ ADM_INPUT = {}
 ADM_SEARCH = {}
 USER_LIST_SORT = {}
 GROUP_LIST_SORT = {}
+MCH_WIZARD = {}
 SUBADMIN_WIZARD = {}
 USERS_PER_PAGE = 10
 
@@ -31,7 +33,7 @@ PERMISSIONS_CATALOG = {
         'adm_resetfree_', 'adm_history_', 'adm_dm_', 'adm_ban2_', 'adm_unban2_', 'adm_searchpage_',
     ]},
     'perm_groups': {'label': '💬 קבוצות', 'prefixes': ['adm_groups', 'adm_groupview', 'adm_gleave', 'adm_gadmins', 'adm_gdemote', 'adm_gpromote', 'adm_searchpage_']},
-    'perm_settings': {'label': '⚙️ הגדרות מערכת', 'prefixes': ['adm_toggle_lock', 'adm_authchannel', 'adm_toggle_auth', 'adm_set_channel', 'adm_removechannel', 'adm_words']},
+    'perm_settings': {'label': '⚙️ הגדרות מערכת', 'prefixes': ['adm_toggle_lock', 'adm_authchannel', 'adm_toggle_auth', 'adm_mch_', 'adm_words']},
     'perm_payments': {'label': '💰 מערכת תשלומים', 'prefixes': ['adm_payments', 'adm_toggle_payments', 'adm_set_freelimit', 'adm_set_refratio', 'adm_packages', 'adm_pkg', 'adm_resetfree_all']},
     'perm_stats': {'label': '📊 סטטיסטיקות', 'prefixes': ['adm_stats']},
     'perm_popular': {'label': '🔥 חיפושים פופולריים', 'prefixes': ['adm_popular']},
@@ -76,10 +78,10 @@ PROMPTS = {
     'unban_user': {'label': 'שחרור משתמש', 'prompt': "שלח את מזהה המשתמש לשחרור.", 'back': 'ban'},
     'ban_chat': {'label': 'חסימת קבוצה', 'prompt': "שלח את מזהה הקבוצה לחסימה (ואפשר סיבה אחרי רווח).", 'back': 'ban'},
     'unban_chat': {'label': 'שחרור קבוצה', 'prompt': "שלח את מזהה הקבוצה לשחרור.", 'back': 'ban'},
-    'set_channel': {'label': 'שינוי ערוץ עדכונים', 'prompt': (
-        "שלח את שם המשתמש של הערוץ (בלי @) לערוץ ציבורי - לדוגמה: <code>searchgram_bots</code>\n\n"
-        "או שלח את המזהה (ID) לערוץ פרטי - לדוגמה: <code>-1001234567890</code>\n"
-        "(הבוט חייב להיות חבר בערוץ הפרטי, כאדמין עם הרשאת הזמנת משתמשים)"
+    'add_mandatory': {'label': 'הוספת ערוץ/קבוצת חובה', 'prompt': (
+        "שלח את שם המשתמש (בלי @) אם ציבורי - לדוגמה: <code>searchgram_bots</code>\n\n"
+        "או שלח את המזהה (ID) אם פרטי - לדוגמה: <code>-1001234567890</code>\n"
+        "(הבוט חייב להיות חבר, כאדמין עם הרשאת הזמנת משתמשים, כדי ליצור קישור הזמנה)"
     ), 'back': 'authchannel'},
     'add_word': {'label': 'הוספת מילה חסומה', 'prompt': "שלח את המילה/הביטוי שברצונך לחסום מחיפוש.", 'back': 'words'},
     'del_word': {'label': 'הסרת מילה חסומה', 'prompt': "שלח את המילה שברצונך להסיר מהחסימה.", 'back': 'words'},
@@ -227,31 +229,49 @@ async def _banlist_text_markup(kind, page):
 
 
 async def _authchannel_menu_text_markup():
-    from .utils import resolve_update_channel
     auth_force = await db.get_config('auth_force', AUTH_CHANNEL_FORCE)
-    update_channel_cfg = await db.get_config('update_channel', UPDATE_CHANNEL)
-    has_channel = bool(update_channel_cfg)
-
-    if isinstance(update_channel_cfg, dict):
-        channel_display = update_channel_cfg.get('title') or update_channel_cfg.get('value') or 'לא ידוע'
-        if update_channel_cfg.get('kind') == 'private':
-            channel_display += ' (פרטי)'
-    else:
-        channel_display = update_channel_cfg or 'לא הוגדר ערוץ'
+    channels = await db.get_mandatory_channels()
 
     auth_label = '🟢 חיוב הרשמה: מופעל' if auth_force else '🔴 חיוב הרשמה: כבוי'
     text = (
-        "📣 <b>חיוב הרשמה לערוץ</b>\n\n"
-        "<blockquote>כשזה מופעל, משתמשים חייבים להיות מנויים לערוץ שהוגדר כדי לקבל קבצים מהבוט.</blockquote>\n\n"
-        f"ערוץ נוכחי: <b>{channel_display}</b>"
+        "📣 <b>חיוב הרשמה</b>\n\n"
+        "<blockquote>כשזה מופעל, משתמשים חייבים להיות מנויים לכל הערוצים/קבוצות שהוגדרו למטה כדי לקבל קבצים מהבוט.</blockquote>\n\n"
+        f"סה'כ ברשימה: <b>{len(channels)}</b>"
     )
-    keyboard = [
-        [InlineKeyboardButton(auth_label, callback_data='adm_toggle_auth', style=enums.ButtonStyle.SUCCESS if auth_force else enums.ButtonStyle.DANGER)],
-        [InlineKeyboardButton('✏️ הוספה/שינוי ערוץ', callback_data='adm_set_channel', style=enums.ButtonStyle.PRIMARY)],
-    ]
-    if has_channel:
-        keyboard.append([InlineKeyboardButton('🗑 הסרת הערוץ', callback_data='adm_removechannel_ask', style=enums.ButtonStyle.DANGER)])
+    keyboard = [[InlineKeyboardButton(auth_label, callback_data='adm_toggle_auth', style=enums.ButtonStyle.SUCCESS if auth_force else enums.ButtonStyle.DANGER)]]
+
+    for c in channels:
+        icon = '💬' if c.get('type') == 'group' else '📢'
+        extra = ' (+חיפוש)' if c.get('type') == 'group' and c.get('also_search') else ''
+        keyboard.append([InlineKeyboardButton(f"{icon} {c.get('title', '?')}{extra}", callback_data=f"adm_mch_view_{c['key']}")])
+
+    keyboard.append([InlineKeyboardButton('➕ הוספת ערוץ/קבוצה', callback_data='adm_mch_add', style=enums.ButtonStyle.SUCCESS)])
     keyboard.append([InlineKeyboardButton('חזרה ⋟', callback_data='adm_home', style=enums.ButtonStyle.PRIMARY)])
+    return text, InlineKeyboardMarkup(keyboard)
+
+
+async def _mch_view_text_markup(key):
+    channels = await db.get_mandatory_channels()
+    c = next((x for x in channels if x.get('key') == key), None)
+    if not c:
+        return None, None
+
+    kind_label = 'קבוצה' if c.get('type') == 'group' else 'ערוץ'
+    priv_label = 'פרטי' if c.get('kind') == 'private' else 'ציבורי'
+    text = (
+        f"📣 <b>{c.get('title', '?')}</b>\n\n"
+        f"<blockquote>סוג: {kind_label} ({priv_label})\n"
+        f"מזהה: <code>{c.get('id')}</code></blockquote>"
+    )
+
+    keyboard = []
+    if c.get('type') == 'group':
+        also_search = c.get('also_search', False)
+        label = '🟢 הבוט גם מחפש כאן' if also_search else '🔴 הבוט לא מחפש כאן (רק חיוב הרשמה)'
+        keyboard.append([InlineKeyboardButton(label, callback_data=f'adm_mch_togglesearch_{key}', style=enums.ButtonStyle.SUCCESS if also_search else enums.ButtonStyle.DANGER)])
+
+    keyboard.append([InlineKeyboardButton('🗑 הסרה', callback_data=f'adm_mch_remove_{key}_ask', style=enums.ButtonStyle.DANGER)])
+    keyboard.append([InlineKeyboardButton('חזרה ⋟', callback_data='adm_authchannel_menu', style=enums.ButtonStyle.PRIMARY)])
     return text, InlineKeyboardMarkup(keyboard)
 
 
@@ -745,36 +765,50 @@ async def admin_text_input(client, message):
 
         return await client.edit_message_caption(panel_chat, panel_msg, caption=result, reply_markup=_ban_menu_markup())
 
-    if action == 'set_channel':
+    if action == 'add_mandatory':
         text_in = text_in.strip()
 
-        if text_in.lstrip('-').isdigit():
-            try:
-                channel_id = int(text_in)
-                chat = await client.get_chat(channel_id)
-                invite_link = chat.invite_link or await client.export_chat_invite_link(channel_id)
-            except Exception as e:
-                text, markup = await _authchannel_menu_text_markup()
-                return await client.edit_message_caption(
-                    panel_chat, panel_msg,
-                    caption=f"❌ לא ניתן להגדיר את הערוץ הפרטי: {e}\n\nודא שהבוט חבר בערוץ, אדמין, ויש לו הרשאת הזמנת משתמשים.\n\n{text}",
-                    reply_markup=markup
-                )
-            await db.set_config('update_channel', {'kind': 'private', 'id': channel_id, 'invite_link': invite_link, 'title': chat.title})
+        try:
+            if text_in.lstrip('-').isdigit():
+                chat_id = int(text_in)
+                chat = await client.get_chat(chat_id)
+                invite_link = chat.invite_link or await client.export_chat_invite_link(chat_id)
+                kind, entry_id = 'private', chat.id
+            else:
+                username = text_in.lstrip('@')
+                if not username:
+                    raise ValueError("שם משתמש לא תקין.")
+                chat = await client.get_chat(username)
+                invite_link, kind, entry_id = None, 'public', username
+        except Exception as e:
             text, markup = await _authchannel_menu_text_markup()
             return await client.edit_message_caption(
-                panel_chat, panel_msg, caption=f"✅ ערוץ העדכונים עודכן לערוץ פרטי: <b>{chat.title}</b>.\n\n{text}", reply_markup=markup
+                panel_chat, panel_msg,
+                caption=f"❌ שגיאה: {e}\n\nודא שהבוט חבר, אדמין, ויש לו הרשאת הזמנת משתמשים (לפרטי).\n\n{text}",
+                reply_markup=markup
             )
 
-        channel = text_in.lstrip('@')
-        if not channel:
-            text, markup = await _authchannel_menu_text_markup()
-            return await client.edit_message_caption(panel_chat, panel_msg, caption=f"❌ שם ערוץ לא תקין.\n\n{text}", reply_markup=markup)
-        await db.set_config('update_channel', {'kind': 'public', 'value': channel})
+        chat_type = 'group' if chat.type in (enums.ChatType.GROUP, enums.ChatType.SUPERGROUP) else 'channel'
+        entry = {
+            'key': uuid.uuid4().hex[:8], 'id': entry_id, 'kind': kind, 'title': chat.title,
+            'invite_link': invite_link, 'type': chat_type, 'also_search': False,
+        }
+
+        if chat_type == 'group':
+            MCH_WIZARD[admin_id] = entry
+            markup = InlineKeyboardMarkup([
+                [InlineKeyboardButton('✅ כן, גם חיפוש', callback_data='adm_mch_searchyes'),
+                 InlineKeyboardButton('❌ לא, רק חיוב הרשמה', callback_data='adm_mch_searchno')],
+            ])
+            return await client.edit_message_caption(
+                panel_chat, panel_msg,
+                caption=f"זו קבוצה: <b>{chat.title}</b>\n\nהאם הבוט יפעל שם גם לחיפוש רגיל, או רק ישמש לחיוב הרשמה?",
+                reply_markup=markup
+            )
+
+        await db.add_mandatory_channel(entry)
         text, markup = await _authchannel_menu_text_markup()
-        return await client.edit_message_caption(
-            panel_chat, panel_msg, caption=f"✅ ערוץ העדכונים עודכן ל-<code>{channel}</code>.\n\n{text}", reply_markup=markup
-        )
+        return await client.edit_message_caption(panel_chat, panel_msg, caption=f"✅ נוסף: <b>{chat.title}</b>.\n\n{text}", reply_markup=markup)
 
     if action == 'set_freelimit':
         try:
@@ -1255,21 +1289,48 @@ async def admin_callback(client, query):
         text, markup = await _authchannel_menu_text_markup()
         return await query.message.edit_caption(text, reply_markup=markup)
 
-    if data == "adm_set_channel":
-        return await _start_input(query, "set_channel")
+    if data == "adm_mch_add":
+        return await _start_input(query, "add_mandatory")
 
-    if data == "adm_removechannel_ask":
-        async def _do_removechannel():
-            await db.set_config('update_channel', None)
-            await db.set_config('auth_force', False)
-            text, markup = await _authchannel_menu_text_markup()
-            await query.message.edit_caption(f"✅ הערוץ הוסר, וחיוב ההרשמה כובה אוטומטית.\n\n{text}", reply_markup=markup)
+    if data in ("adm_mch_searchyes", "adm_mch_searchno"):
+        entry = MCH_WIZARD.pop(admin_id, None)
+        if not entry:
+            return await query.answer("הפעולה פגה, התחל מחדש.", show_alert=True)
+        entry['also_search'] = (data == "adm_mch_searchyes")
+        await db.add_mandatory_channel(entry)
+        text, markup = await _authchannel_menu_text_markup()
+        return await query.message.edit_caption(f"✅ נוסף: <b>{entry['title']}</b>.\n\n{text}", reply_markup=markup)
 
-        async def _cancel_removechannel():
+    if data.startswith("adm_mch_view_"):
+        key = data[len("adm_mch_view_"):]
+        text, markup = await _mch_view_text_markup(key)
+        if not text:
+            return await query.answer("❌ לא נמצא.", show_alert=True)
+        return await query.message.edit_caption(text, reply_markup=markup)
+
+    if data.startswith("adm_mch_togglesearch_"):
+        key = data[len("adm_mch_togglesearch_"):]
+        channels = await db.get_mandatory_channels()
+        c = next((x for x in channels if x.get('key') == key), None)
+        if not c:
+            return await query.answer("❌ לא נמצא.", show_alert=True)
+        await db.update_mandatory_channel(key, also_search=not c.get('also_search', False))
+        text, markup = await _mch_view_text_markup(key)
+        return await query.message.edit_caption(text, reply_markup=markup)
+
+    if data.startswith("adm_mch_remove_") and data.endswith("_ask"):
+        key = data[len("adm_mch_remove_"):-len("_ask")]
+
+        async def _do_mch_remove():
+            await db.remove_mandatory_channel(key)
             text, markup = await _authchannel_menu_text_markup()
+            await query.message.edit_caption(f"✅ הוסר.\n\n{text}", reply_markup=markup)
+
+        async def _cancel_mch_remove():
+            text, markup = await _mch_view_text_markup(key)
             await query.message.edit_caption(text, reply_markup=markup)
 
-        return await _ask_confirm(query, "להסיר את הערוץ? חיוב ההרשמה יכובה אוטומטית (אין ערוץ לבדוק מולו).", _do_removechannel, _cancel_removechannel)
+        return await _ask_confirm(query, "להסיר את הערוץ/קבוצה מרשימת חיוב ההרשמה?", _do_mch_remove, _cancel_mch_remove)
 
     if data == "adm_payments_menu":
         return await query.message.edit_caption("💰 <b>מערכת תשלומים</b>\n\nבחר הגדרה:", reply_markup=await _payments_menu_markup())

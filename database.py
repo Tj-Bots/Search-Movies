@@ -272,6 +272,33 @@ class Database:
     async def set_config(self, key, value):
         await self.bot_config.update_one({'_id': 'global'}, {'$set': {key: value}}, upsert=True)
 
+    async def get_mandatory_channels(self):
+        return await self.get_config('mandatory_channels', [])
+
+    async def add_mandatory_channel(self, entry):
+        channels = await self.get_mandatory_channels()
+        channels.append(entry)
+        await self.set_config('mandatory_channels', channels)
+
+    async def remove_mandatory_channel(self, key):
+        channels = await self.get_mandatory_channels()
+        channels = [c for c in channels if c.get('key') != key]
+        await self.set_config('mandatory_channels', channels)
+
+    async def update_mandatory_channel(self, key, **updates):
+        channels = await self.get_mandatory_channels()
+        for c in channels:
+            if c.get('key') == key:
+                c.update(updates)
+        await self.set_config('mandatory_channels', channels)
+
+    async def is_search_disabled_group(self, chat_id):
+        channels = await self.get_mandatory_channels()
+        for c in channels:
+            if c.get('type') == 'group' and c.get('id') == chat_id and not c.get('also_search', False):
+                return True
+        return False
+
     async def get_blocked_words(self):
         doc = await self.bot_config.find_one({'_id': 'global'}) or {}
         return doc.get('blocked_words', [])

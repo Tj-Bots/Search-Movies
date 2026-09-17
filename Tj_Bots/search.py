@@ -13,6 +13,7 @@ async def search_handler(client, message):
     chat_id = message.chat.id
 
     if message.chat.type in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]:
+        if await db.is_search_disabled_group(chat_id): return
         await db.add_group(chat_id, message.chat.title)
         settings = await db.get_settings(chat_id)
         if settings.get('search_trigger') == 'bang' and not query.startswith('!'): return

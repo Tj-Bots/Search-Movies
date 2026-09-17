@@ -5,7 +5,7 @@ from pyrogram import Client, filters, enums
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery, InputMediaPhoto
 from config import UPDATE_CHANNEL, REQUEST_GROUP, PHOTO_URL, ADMINS, LOG_CHANNEL, AUTH_CHANNEL_FORCE
 from database import db
-from .utils import get_readable_size, resolve_update_channel
+from .utils import get_readable_size, get_missing_mandatory, mandatory_join_markup
 from .pay import check_quota, consume_search, out_of_quota_markup, denial_text
 
 async def send_file_with_fallback(client, chat_id, file_data, reply_to_id=None):
@@ -60,23 +60,12 @@ async def start_command(client, message):
                 return await send_buy_menu(message, user_id)
 
             should_check = await db.get_config('auth_force', AUTH_CHANNEL_FORCE)
-            update_channel = await db.get_config('update_channel', UPDATE_CHANNEL)
-            check_id, join_url = resolve_update_channel(update_channel)
-            is_subbed = True
+            missing = await get_missing_mandatory(client, user_id) if should_check else []
 
-            if should_check:
-                try:
-                    await client.get_chat_member(check_id, user_id)
-                except:
-                    is_subbed = False
-
-            if not is_subbed:
-                btn = [[InlineKeyboardButton('📣 להרשמה לערוץ', url=join_url)],
-                       [InlineKeyboardButton('↻ נסה שוב', callback_data=f"checksub_{file_db_id}")]]
-                
+            if missing:
                 return await message.reply_text(
-                    "**כדי להשתמש בבוט הזה עליך להיות מנוי לערוץ העדכונים שלו!🫰**",
-                    reply_markup=InlineKeyboardMarkup(btn),
+                    "**כדי להשתמש בבוט הזה עליך להיות מנוי לכל הערוצים/קבוצות החובה שלו!🫰**",
+                    reply_markup=mandatory_join_markup(missing, f"checksub_{file_db_id}"),
                     quote=True
                 )
 
@@ -131,13 +120,10 @@ async def send_home_message(client, message, user=None, is_edit=False):
     bot_name = client.me.first_name
     bot_username = client.me.username
     bot_mention = f"[{bot_name}](https://t.me/{bot_username})"
-    update_channel = await db.get_config('update_channel', UPDATE_CHANNEL)
-    _, update_channel_url = resolve_update_channel(update_channel)
-
     buttons = [
         [InlineKeyboardButton("🔍 חיפוש באינליין 🔎", switch_inline_query_current_chat="", style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('✇ קבוצת בקשות ✇', url=REQUEST_GROUP, style=enums.ButtonStyle.PRIMARY),
-         InlineKeyboardButton('✇ ערוץ עדכונים ✇', url=update_channel_url, style=enums.ButtonStyle.PRIMARY)],
+         InlineKeyboardButton('✇ ערוץ עדכונים ✇', url=f'https://t.me/{UPDATE_CHANNEL}', style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('〄 עזרה 〄', callback_data='help', style=enums.ButtonStyle.PRIMARY),
          InlineKeyboardButton('⍟ אודות ⍟', callback_data='about', style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('🔎 קניית קבצים 🔎', callback_data='pay_menu', style=enums.ButtonStyle.SUCCESS)],
@@ -167,18 +153,10 @@ async def callback_handler(client, query: CallbackQuery):
         file_db_id = data.split("_")[1]
 
         should_check = await db.get_config('auth_force', AUTH_CHANNEL_FORCE)
-        update_channel = await db.get_config('update_channel', UPDATE_CHANNEL)
-        check_id, _ = resolve_update_channel(update_channel)
-        is_subbed = True
+        missing = await get_missing_mandatory(client, user_id) if should_check else []
 
-        if should_check:
-            try:
-                await client.get_chat_member(check_id, user_id)
-            except:
-                is_subbed = False
-
-        if not is_subbed:
-            return await query.answer("❌ עדיין לא נרשמת לערוץ! עליך להירשם כדי לקבל את הקובץ.", show_alert=True)
+        if missing:
+            return await query.answer("❌ עדיין לא נרשמת לכל הערוצים/קבוצות! עליך להירשם כדי לקבל את הקובץ.", show_alert=True)
         
         file_data = await db.get_file(file_db_id)
         if file_data:
@@ -393,14 +371,12 @@ async def callback_handler(client, query: CallbackQuery):
         bot_name = client.me.first_name
         bot_username = client.me.username
         bot_mention = f"[{bot_name}](https://t.me/{bot_username})"
-        update_channel = await db.get_config('update_channel', UPDATE_CHANNEL)
-        _, update_channel_url = resolve_update_channel(update_channel)
         txt = (
             "<blockquote><b>╔════❰ 𝗔𝗯𝗼𝘂𝘁 𝗧𝗵𝗲 𝗕𝗼𝘁 ❱═❍⊱❁۪۪</b>\n"
             "<b>║╭━━━━━━━━━━━━━━━➣</b>\n"
             f"<b>║┣⪼ 🤖 ʙᴏᴛ : {bot_mention}</b>\n"
             "<b>║┣⪼ 👦 ᴄʀᴇᴀᴛᴏʀ : @BOSS1480</b>\n"
-            f"<b>║┣⪼ 🤖 ᴜᴘᴅᴀᴛᴇ : <a href='{update_channel_url}'>Update Channel</a></b>\n"
+            f"<b>║┣⪼ 🤖 ᴜᴘᴅᴀᴛᴇ : <a href='https://t.me/{UPDATE_CHANNEL}'>Update Channel</a></b>\n"
             "<b>║┣⪼ 🗣️ ʟᴀɴɢᴜᴀɢᴇ : [Python](https://www.python.org/)</b>\n"
             "<b>║┣⪼ 📚 Lɪʙʀᴀʀʏ : [Pyrogram](https://docs.pyrogram.org/)</b>\n"
             "<b>║┣⪼ &lt;/&gt; Sᴏᴜʀᴄᴇ: : [GitHub](https://github.com/TJ-Bots/Search-Movies)</b>\n"
