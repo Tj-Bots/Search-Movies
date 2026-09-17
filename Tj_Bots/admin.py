@@ -1018,6 +1018,7 @@ async def _subadmin_view_text_markup(user_id):
         f"<blockquote>⏳ תוקף: {expiry_line}\n\n<b>הרשאות:</b>\n{perm_labels or 'אין הרשאות'}</blockquote>"
     )
     keyboard = [
+        [InlineKeyboardButton('✏️ ערוך הרשאות', callback_data=f'adm_subadmin_editperms_{user_id}', style=enums.ButtonStyle.PRIMARY)],
         [InlineKeyboardButton('🗑 הסר אדמין משני', callback_data=f'adm_subadmin_remove_{user_id}_ask', style=enums.ButtonStyle.DANGER)],
         [InlineKeyboardButton('חזרה לרשימה ⋟', callback_data='adm_subadmins_menu', style=enums.ButtonStyle.PRIMARY)],
     ]
@@ -1026,6 +1027,7 @@ async def _subadmin_view_text_markup(user_id):
 
 def _subadmin_perms_markup(admin_id):
     wizard = SUBADMIN_WIZARD[admin_id]
+    editing = wizard.get('editing')
     all_keys = list(PERMISSIONS_CATALOG.keys())
 
     buttons = []
@@ -1042,8 +1044,10 @@ def _subadmin_perms_markup(admin_id):
     all_selected = len(wizard['perms']) == len(all_keys)
     toggle_all_label = '⬜️ בטל הכל' if all_selected else '✅ סמן הכל'
     keyboard.append([InlineKeyboardButton(toggle_all_label, callback_data='adm_subadmin_toggleall', style=enums.ButtonStyle.PRIMARY)])
-    keyboard.append([InlineKeyboardButton('✅ המשך', callback_data='adm_subadmin_perms_done', style=enums.ButtonStyle.SUCCESS)])
-    keyboard.append([InlineKeyboardButton('❌ ביטול', callback_data='adm_subadmins_menu', style=enums.ButtonStyle.DANGER)])
+    done_label = '💾 שמור שינויים' if editing else '✅ המשך'
+    keyboard.append([InlineKeyboardButton(done_label, callback_data='adm_subadmin_perms_done', style=enums.ButtonStyle.SUCCESS)])
+    cancel_target = f"adm_subadmin_view_{wizard['target']}" if editing else 'adm_subadmins_menu'
+    keyboard.append([InlineKeyboardButton('❌ ביטול', callback_data=cancel_target, style=enums.ButtonStyle.DANGER)])
     return InlineKeyboardMarkup(keyboard)
 
 
@@ -1104,6 +1108,17 @@ async def admin_callback(client, query):
             return await query.answer("❌ האדמין לא נמצא.", show_alert=True)
         return await query.message.edit_caption(text, reply_markup=markup)
 
+    if data.startswith("adm_subadmin_editperms_"):
+        target_id = int(data[len("adm_subadmin_editperms_"):])
+        sub = await db.get_sub_admin(target_id)
+        if not sub:
+            return await query.answer("❌ האדמין לא נמצא.", show_alert=True)
+        SUBADMIN_WIZARD[admin_id] = {'target': target_id, 'perms': set(sub.get('permissions', [])), 'editing': True}
+        return await query.message.edit_caption(
+            f"🎛 <b>עריכת הרשאות עבור <code>{target_id}</code>:</b>\n\nלחץ על הרשאה כדי להוסיף/להסיר, ואז 'שמור שינויים'.",
+            reply_markup=_subadmin_perms_markup(admin_id)
+        )
+
     if data.startswith("adm_subadmin_remove_") and data.endswith("_ask"):
         target_id = int(data[len("adm_subadmin_remove_"):-len("_ask")])
 
@@ -1145,6 +1160,20 @@ async def admin_callback(client, query):
             return await query.answer("הפעולה פגה, התחל מחדש.", show_alert=True)
         if not wizard['perms']:
             return await query.answer("❌ יש לבחור לפחות הרשאה אחת.", show_alert=True)
+
+        if wizard.get('editing'):
+            SUBADMIN_WIZARD.pop(admin_id, None)
+            target_id = wizard['target']
+            sub = await db.get_sub_admin(target_id) or {}
+            await db.add_sub_admin(target_id, list(wizard['perms']), expire_at=sub.get('expire_at'), is_permanent=sub.get('is_permanent', False))
+            try:
+                perm_labels = "\n".join(f"• {PERMISSIONS_CATALOG[p]['label']}" for p in wizard['perms'])
+                await client.send_message(target_id, f"ℹ️ <b>ההרשאות שלך בפאנל עודכנו.</b>\n\nההרשאות הנוכחיות שלך:\n{perm_labels}")
+            except Exception:
+                pass
+            text, markup = await _subadmin_view_text_markup(target_id)
+            return await query.message.edit_caption(f"✅ ההרשאות עודכנו.\n\n{text}", reply_markup=markup)
+
         return await query.message.edit_caption("⏳ <b>בחר תוקף להרשאה:</b>", reply_markup=_subadmin_duration_markup())
 
     if data.startswith("adm_subadmin_duration_"):
