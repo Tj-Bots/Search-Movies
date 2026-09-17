@@ -1,3 +1,4 @@
+import asyncio
 from pyrogram import Client, filters, ContinuePropagation
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from config import ADMINS
@@ -83,7 +84,12 @@ async def support_admin_reply(client, message):
         hint = await client.send_message(user_id, CONTINUE_HINT, reply_to_message_id=sent.id)
         await db.save_continue_marker(user_id, sent.id)
         await db.save_continue_marker(user_id, hint.id)
-        await message.reply("✅ נשלח למשתמש.", quote=True)
+        confirm = await message.reply("✅ נשלח למשתמש.", quote=True)
+        await asyncio.sleep(3)
+        try:
+            await confirm.delete()
+        except Exception:
+            pass
     except Exception as e:
         await message.reply(f"❌ שליחה נכשלה: {e}", quote=True)
 
