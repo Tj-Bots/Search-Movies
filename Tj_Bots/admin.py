@@ -15,6 +15,7 @@ ADM_SEARCH = {}
 USER_LIST_SORT = {}
 GROUP_LIST_SORT = {}
 MCH_WIZARD = {}
+GIFT_PREM_WIZARD = {}
 SUBADMIN_WIZARD = {}
 USERS_PER_PAGE = 10
 
@@ -83,6 +84,7 @@ PROMPTS = {
         "או שלח את המזהה (ID) אם פרטי - לדוגמה: <code>-1001234567890</code>\n"
         "(הבוט חייב להיות חבר, כאדמין עם הרשאת הזמנת משתמשים, כדי ליצור קישור הזמנה)"
     ), 'back': 'authchannel'},
+    'giftprem_target': {'label': 'בחירת משתמש למתנת פרימיום', 'prompt': "שלח את מזהה (ID) המשתמש שיקבל את הפרימיום.", 'back': 'giftprem'},
     'add_word': {'label': 'הוספת מילה חסומה', 'prompt': "שלח את המילה/הביטוי שברצונך לחסום מחיפוש.", 'back': 'words'},
     'del_word': {'label': 'הסרת מילה חסומה', 'prompt': "שלח את המילה שברצונך להסיר מהחסימה.", 'back': 'words'},
     'find_user': {'label': 'איתור משתמש', 'prompt': "שלח מזהה (ID) או שם משתמש לחיפוש.", 'back': 'users'},
@@ -849,6 +851,16 @@ async def admin_text_input(client, message):
         text, markup = await _render_group_admins(client, chat_id, page)
         return await client.edit_message_caption(panel_chat, panel_msg, caption=f"{note}\n\n{text}", reply_markup=markup)
 
+    if action == 'giftprem_target':
+        try:
+            target_id = int(text_in)
+        except ValueError:
+            return await client.edit_message_caption(panel_chat, panel_msg, caption="❌ מזהה לא תקין.", reply_markup=_giftprem_menu_markup())
+        GIFT_PREM_WIZARD[admin_id] = {'target': target_id}
+        return await client.edit_message_caption(
+            panel_chat, panel_msg, caption="⏳ <b>בחר משך זמן:</b>", reply_markup=_giftprem_duration_markup()
+        )
+
     if action == 'subadmin_add_id':
         try:
             target_id = int(text_in)
@@ -1026,6 +1038,26 @@ async def admin_text_input(client, message):
             markup = await _user_actions_markup(target_user, back_page)
             caption = f"{note}\n\n{info_text}"
         return await client.edit_message_caption(panel_chat, panel_msg, caption=caption, reply_markup=markup)
+
+
+# ---------- gift premium from stars balance ----------
+
+def _giftprem_menu_markup():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton('🎁 לעצמי', callback_data='adm_giftprem_self', style=enums.ButtonStyle.SUCCESS),
+         InlineKeyboardButton('🎁 למשתמש אחר', callback_data='adm_giftprem_other', style=enums.ButtonStyle.PRIMARY)],
+        [InlineKeyboardButton('חזרה ⋟', callback_data='adm_stars', style=enums.ButtonStyle.PRIMARY)],
+    ])
+
+
+def _giftprem_duration_markup():
+    from .pay import PREMIUM_GIFT_OPTIONS
+    keyboard = [
+        [InlineKeyboardButton(f"{months} חודשים - {stars} ⭐", callback_data=f'adm_giftprem_duration_{months}')]
+        for months, stars in PREMIUM_GIFT_OPTIONS.items()
+    ]
+    keyboard.append([InlineKeyboardButton('❌ ביטול', callback_data='adm_giftprem_menu', style=enums.ButtonStyle.DANGER)])
+    return InlineKeyboardMarkup(keyboard)
 
 
 # ---------- sub-admins ----------
@@ -1722,9 +1754,55 @@ async def admin_callback(client, query):
         text = await build_purchase_stats_text()
         markup = InlineKeyboardMarkup([
             [InlineKeyboardButton('⚙️ הגדרות תשלומים', callback_data='adm_payments_menu', style=enums.ButtonStyle.PRIMARY)],
+            [InlineKeyboardButton('🎁 מתנת פרימיום מהיתרה', callback_data='adm_giftprem_menu', style=enums.ButtonStyle.SUCCESS)],
             [InlineKeyboardButton('חזרה ⋟', callback_data='adm_home', style=enums.ButtonStyle.PRIMARY)],
         ])
         return await query.message.edit_caption(text, reply_markup=markup)
+
+    if data == "adm_giftprem_menu":
+        GIFT_PREM_WIZARD.pop(admin_id, None)
+        return await query.message.edit_caption(
+            "🎁 <b>מתנת פרימיום מהיתרה</b>\n\n<blockquote>הבוט ישתמש בכוכבים שנצברו מרכישות משתמשים כדי לתת פרימיום. למי לתת?</blockquote>",
+            reply_markup=_giftprem_menu_markup()
+        )
+
+    if data == "adm_giftprem_self":
+        GIFT_PREM_WIZARD[admin_id] = {'target': admin_id}
+        return await query.message.edit_caption("⏳ <b>בחר משך זמן:</b>", reply_markup=_giftprem_duration_markup())
+
+    if data == "adm_giftprem_other":
+        return await _start_input(query, "giftprem_target")
+
+    if data.startswith("adm_giftprem_duration_"):
+        months = int(data[len("adm_giftprem_duration_"):])
+        wizard = GIFT_PREM_WIZARD.get(admin_id)
+        if not wizard:
+            return await query.answer("הפעולה פגה, התחל מחדש.", show_alert=True)
+
+        from .pay import PREMIUM_GIFT_OPTIONS, gift_premium_subscription
+        stars = PREMIUM_GIFT_OPTIONS[months]
+        target_id = wizard['target']
+
+        async def _do_giftprem():
+            try:
+                await gift_premium_subscription(target_id, months)
+                note = f"✅ הפרימיום נשלח ל-<code>{target_id}</code>!"
+                try:
+                    await client.send_message(target_id, f"🎉 <b>קיבלת מתנה!</b>\nפרימיום לטלגרם ל-{months} חודשים 🎁")
+                except Exception:
+                    pass
+            except Exception as e:
+                note = f"❌ שליחה נכשלה: {e}"
+            GIFT_PREM_WIZARD.pop(admin_id, None)
+            await query.message.edit_caption(f"{note}", reply_markup=_back_markup('adm_stars'))
+
+        async def _cancel_giftprem():
+            await query.message.edit_caption("⏳ <b>בחר משך זמן:</b>", reply_markup=_giftprem_duration_markup())
+
+        return await _ask_confirm(
+            query, f"לתת ל-<code>{target_id}</code> פרימיום ל-{months} חודשים תמורת {stars} ⭐ מיתרת הבוט?",
+            _do_giftprem, _cancel_giftprem
+        )
 
     if data == "adm_stats":
         text = await _admin_stats_text()
@@ -1775,7 +1853,7 @@ async def _start_input(query, action):
     info = PROMPTS[action]
     admin_id = query.from_user.id
     ADM_INPUT[admin_id] = {'action': action, 'panel_chat': query.message.chat.id, 'panel_msg': query.message.id}
-    back_targets = {'ban': 'adm_ban_menu', 'authchannel': 'adm_authchannel_menu', 'words': 'adm_words_menu', 'users': 'adm_users_1', 'groups': 'adm_groups_1', 'channels': 'adm_channels_menu', 'payments': 'adm_payments_menu'}
+    back_targets = {'ban': 'adm_ban_menu', 'authchannel': 'adm_authchannel_menu', 'words': 'adm_words_menu', 'users': 'adm_users_1', 'groups': 'adm_groups_1', 'channels': 'adm_channels_menu', 'payments': 'adm_payments_menu', 'giftprem': 'adm_giftprem_menu'}
     markup = InlineKeyboardMarkup([[InlineKeyboardButton('❌ ביטול', callback_data=back_targets[info['back']])]])
     text = f"✏️ <b>{info['label']}</b>\n\n{info['prompt']}"
     await query.message.edit_caption(text, reply_markup=markup)

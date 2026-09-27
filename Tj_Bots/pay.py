@@ -1,13 +1,38 @@
 import time
 import uuid
+import httpx
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from pyrogram import Client, filters, enums
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto, LabeledPrice, CallbackQuery
-from config import ADMINS, FREE_DAILY_SEARCHES, PHOTO_URL
+from config import ADMINS, FREE_DAILY_SEARCHES, PHOTO_URL, BOT_TOKEN
 from database import db
 
 ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
+
+# Fixed by Telegram itself - not admin-editable.
+PREMIUM_GIFT_OPTIONS = {3: 1000, 6: 1500, 12: 2500}
+
+
+async def gift_premium_subscription(user_id, month_count, text=None):
+    """Spends the bot's own accumulated Stars balance to gift a user Telegram
+    Premium. pyrogram/pyrotgfork has no wrapper for this Bot-API-only method,
+    but the same bot token also works against the plain HTTP Bot API."""
+    star_count = PREMIUM_GIFT_OPTIONS.get(month_count)
+    if not star_count:
+        raise ValueError("משך זמן לא תקין.")
+
+    payload = {"user_id": user_id, "month_count": month_count, "star_count": star_count}
+    if text:
+        payload["text"] = text
+
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/giftPremiumSubscription"
+    async with httpx.AsyncClient(timeout=15) as http_client:
+        resp = await http_client.post(url, json=payload)
+    data = resp.json()
+    if not data.get("ok"):
+        raise Exception(data.get("description", "שגיאה לא ידועה"))
+    return True
 
 LIFETIME_SECONDS = 100 * 365 * 24 * 3600  # effectively forever
 LIFETIME_DISPLAY_THRESHOLD = 5 * 365 * 24 * 3600  # anything left above this shows as lifetime, not a countdown
