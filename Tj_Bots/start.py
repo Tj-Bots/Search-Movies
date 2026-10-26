@@ -69,6 +69,28 @@ async def start_command(client, message):
                     quote=True
                 )
 
+            if file_db_id.startswith("sendall_"):
+                from .search import SENDALL_TOKENS
+                file_ids = SENDALL_TOKENS.get(file_db_id[len("sendall_"):])
+                if not file_ids:
+                    return await message.reply("❌ הקישור פג תוקף, חפשו מחדש.", quote=True)
+                if not await check_quota(user_id):
+                    return await message.reply_text(
+                        denial_text(),
+                        reply_markup=out_of_quota_markup(client.me.username),
+                        quote=True
+                    )
+                sent_any = False
+                for fid in file_ids:
+                    fdata = await db.get_file(fid)
+                    if fdata and await send_file_with_fallback(client, message.chat.id, fdata, message.id):
+                        sent_any = True
+                if sent_any:
+                    await consume_search(user_id)
+                else:
+                    await message.reply("❌ הקבצים נמחקו מהמקור או שאין לי גישה אליהם.", quote=True)
+                return
+
             file_data = await db.get_file(file_db_id)
             if file_data:
                 if not await check_quota(user_id):
@@ -150,14 +172,37 @@ async def callback_handler(client, query: CallbackQuery):
     user_id = query.from_user.id
 
     if data.startswith("checksub_"):
-        file_db_id = data.split("_")[1]
+        file_db_id = data[len("checksub_"):]
 
         should_check = await db.get_config('auth_force', AUTH_CHANNEL_FORCE)
         missing = await get_missing_mandatory(client, user_id) if should_check else []
 
         if missing:
             return await query.answer("❌ עדיין לא נרשמת לכל הערוצים/קבוצות! עליך להירשם כדי לקבל את הקובץ.", show_alert=True)
-        
+
+        if file_db_id.startswith("sendall_"):
+            from .search import SENDALL_TOKENS
+            file_ids = SENDALL_TOKENS.get(file_db_id[len("sendall_"):])
+            if not file_ids:
+                return await query.answer("❌ הקישור פג תוקף, חפשו מחדש.", show_alert=True)
+            if not await check_quota(user_id):
+                return await query.message.edit_text(
+                    denial_text(),
+                    reply_markup=out_of_quota_markup(client.me.username)
+                )
+            reply_to = query.message.reply_to_message.id if query.message.reply_to_message else None
+            sent_any = False
+            for fid in file_ids:
+                fdata = await db.get_file(fid)
+                if fdata and await send_file_with_fallback(client, query.message.chat.id, fdata, reply_to):
+                    sent_any = True
+            if sent_any:
+                await consume_search(user_id)
+                await query.message.delete()
+            else:
+                await query.answer("❌ הקבצים נמחקו מהמקור או שאין לי גישה אליהם.", show_alert=True)
+            return
+
         file_data = await db.get_file(file_db_id)
         if file_data:
             if not await check_quota(user_id):

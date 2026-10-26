@@ -5,6 +5,9 @@ from database import db
 from config import UPDATE_CHANNEL, ADMINS
 from .utils import get_readable_size, clean_filename
 import asyncio
+import uuid
+
+SENDALL_TOKENS = {}
 
 @Client.on_message(filters.text & ~filters.command(["start", "index", "newindex", "settings", "broadcast", "stats", "restart", "clean", "channels", "watch", "font", "share", "tts", "paste", "buy", "status", "admin"]))
 async def search_handler(client, message):
@@ -62,6 +65,12 @@ async def handle_search_click(client, query: CallbackQuery):
     bot_username = client.me.username
     await query.answer(url=f"https://t.me/{bot_username}?start={file_id}")
 
+@Client.on_callback_query(filters.regex(r"^sendall_"))
+async def handle_sendall_click(client, query: CallbackQuery):
+    token = query.data[len("sendall_"):]
+    bot_username = client.me.username
+    await query.answer(url=f"https://t.me/{bot_username}?start=sendall_{token}")
+
 @Client.on_callback_query(filters.regex(r"^search#"))
 async def search_pagination(client, query):
     try:
@@ -96,14 +105,19 @@ async def send_results_page(client, message, results, page, query, settings, is_
     display_mode = settings.get('display_mode', 'inline')
 
     if display_mode == 'inline':
+        if current_batch:
+            token = uuid.uuid4().hex[:12]
+            SENDALL_TOKENS[token] = [str(res['_id']) for res in current_batch]
+            keyboard.append([InlineKeyboardButton(f"📤 שלח הכל ({len(current_batch)} קבצים)", callback_data=f"sendall_{token}", style=enums.ButtonStyle.SUCCESS)])
+
         for res in current_batch:
             clean = clean_filename(res['file_name'])
             size = get_readable_size(res['file_size'])
             btn_text = f"[{size}] {clean}"
             file_id = str(res['_id'])
-            
+
             keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"dl_{file_id}", style=enums.ButtonStyle.PRIMARY)])
-            
+
     else:
         chars = ['א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט', 'י']
         for i, res in enumerate(current_batch):
