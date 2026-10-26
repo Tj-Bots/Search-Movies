@@ -25,6 +25,7 @@ TEXTS = {
         'joined_ok': '🎉 נרשמת בהצלחה להגרלה! בהצלחה 🍀',
         'not_found': '❌ ההגרלה הזו הסתיימה או לא נמצאה.',
         'not_member': '❌ עליך להצטרף לערוץ/לקבוצה של ההגרלה לפני ההרשמה.',
+        'start_first': '❌ עליך לפתוח את הבוט בפרטי וללחוץ START, ואז לנסות להצטרף להגרלה שוב.',
         'removed_left': "🚫 <b>הוסרת מההגרלה</b>\nעזבת את {title} - כדי להשתתף שוב, הצטרף בחזרה לפני שההגרלה מסתיימת.",
         'winner_notice': "🎉 <b>מזל טוב, זכית בהגרלה!</b>\nמגיע לך {months} חודשי פרימיום לטלגרם 🎁",
         'no_participants': "😔 לא היו משתתפים בהגרלה.",
@@ -49,6 +50,7 @@ TEXTS = {
         'joined_ok': '🎉 You successfully entered the giveaway! Good luck 🍀',
         'not_found': "❌ This giveaway has ended or doesn't exist.",
         'not_member': "❌ You need to join the giveaway's channel/group before registering.",
+        'start_first': "❌ You need to open the bot in private and tap START, then try joining the giveaway again.",
         'removed_left': "🚫 <b>You were removed from the giveaway</b>\nYou left {title} - to join again, come back before the giveaway ends.",
         'winner_notice': "🎉 <b>Congratulations, you won the giveaway!</b>\nYou're getting {months} months of Telegram Premium 🎁",
         'no_participants': "😔 No one joined this giveaway.",
@@ -153,6 +155,19 @@ async def register_giveaway_participant(client, giveaway_id, user_id):
     return 'ok', giveaway
 
 
+async def _answer_via_start(client, query, giveaway_id, fallback_text):
+    """answerCallbackQuery's url param only accepts a link that opens the bot
+    itself (e.g. t.me/<bot>?start=...) - Telegram rejects an arbitrary external
+    link (like a channel invite link) there, which raises and leaves the
+    button looking dead if not caught. So any redirect always goes through the
+    bot's own /start deep link, with a plain-text alert as a safety net."""
+    try:
+        bot_username = client.me.username
+        await query.answer(url=f"https://t.me/{bot_username}?start=ga_{giveaway_id}")
+    except Exception:
+        await query.answer(fallback_text, show_alert=True)
+
+
 @Client.on_callback_query(filters.regex(r"^ga_join_"))
 async def handle_giveaway_join(client, query: CallbackQuery):
     giveaway_id = query.data[len("ga_join_"):]
@@ -165,10 +180,7 @@ async def handle_giveaway_join(client, query: CallbackQuery):
     if not await is_chat_member(client, giveaway['chat_id'], user_id):
         if user_id in giveaway.get('participants', []):
             await db.remove_giveaway_participant(giveaway_id, user_id)
-        invite_url = giveaway.get('invite_url')
-        if invite_url:
-            return await query.answer(url=invite_url)
-        return await query.answer(_t(giveaway, 'not_member'), show_alert=True)
+        return await _answer_via_start(client, query, giveaway_id, _t(giveaway, 'not_member'))
 
     if user_id in giveaway.get('participants', []):
         return await query.answer(_t(giveaway, 'already_joined'), show_alert=True)
@@ -176,8 +188,7 @@ async def handle_giveaway_join(client, query: CallbackQuery):
     try:
         await client.send_message(user_id, _t(giveaway, 'joined_ok'))
     except Exception:
-        bot_username = client.me.username
-        return await query.answer(url=f"https://t.me/{bot_username}?start=ga_{giveaway_id}")
+        return await _answer_via_start(client, query, giveaway_id, _t(giveaway, 'start_first'))
 
     status, giveaway = await register_giveaway_participant(client, giveaway_id, user_id)
     await query.answer(giveaway_result_text(status, giveaway), show_alert=True)
