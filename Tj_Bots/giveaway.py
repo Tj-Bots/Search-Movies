@@ -132,11 +132,17 @@ async def register_giveaway_participant(client, giveaway_id, user_id):
     if not giveaway or giveaway.get('ended'):
         return 'not_found', giveaway or {}
 
+    # Membership is always re-checked first, even for someone already in
+    # participants - that way a stale entry (e.g. from before this check
+    # existed, or someone who got removed and re-added) self-heals instead
+    # of permanently bypassing the gate via the "already joined" shortcut.
+    if not await is_chat_member(client, giveaway['chat_id'], user_id):
+        if user_id in giveaway.get('participants', []):
+            await db.remove_giveaway_participant(giveaway_id, user_id)
+        return 'not_member', giveaway
+
     if user_id in giveaway.get('participants', []):
         return 'already', giveaway
-
-    if not await is_chat_member(client, giveaway['chat_id'], user_id):
-        return 'not_member', giveaway
 
     joined = await db.join_giveaway(giveaway_id, user_id)
     if not joined:
@@ -155,14 +161,17 @@ async def handle_giveaway_join(client, query: CallbackQuery):
     giveaway = await db.get_giveaway(giveaway_id)
     if not giveaway or giveaway.get('ended'):
         return await query.answer(_t(giveaway or {}, 'not_found'), show_alert=True)
-    if user_id in giveaway.get('participants', []):
-        return await query.answer(_t(giveaway, 'already_joined'), show_alert=True)
 
     if not await is_chat_member(client, giveaway['chat_id'], user_id):
+        if user_id in giveaway.get('participants', []):
+            await db.remove_giveaway_participant(giveaway_id, user_id)
         invite_url = giveaway.get('invite_url')
         if invite_url:
             return await query.answer(url=invite_url)
         return await query.answer(_t(giveaway, 'not_member'), show_alert=True)
+
+    if user_id in giveaway.get('participants', []):
+        return await query.answer(_t(giveaway, 'already_joined'), show_alert=True)
 
     try:
         await client.send_message(user_id, _t(giveaway, 'joined_ok'))
