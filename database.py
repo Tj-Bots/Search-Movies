@@ -475,4 +475,13 @@ class Database:
     async def remove_giveaway_participant(self, giveaway_id, user_id):
         await self.giveaways.update_one({'_id': giveaway_id}, {'$pull': {'participants': user_id}})
 
+    async def set_giveaway_pending(self, giveaway_id, pending):
+        await self.giveaways.update_one({'_id': giveaway_id}, {'$set': {'pending_gifts': pending}})
+
+    async def resolve_giveaway_pending(self, giveaway_id, user_id):
+        await self.giveaways.update_one(
+            {'_id': giveaway_id},
+            {'$pull': {'pending_gifts': {'uid': user_id}}, '$push': {'winners': user_id}}
+        )
+
 db = Database()

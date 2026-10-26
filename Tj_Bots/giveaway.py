@@ -25,11 +25,9 @@ TEXTS = {
         'not_found': '❌ ההגרלה הזו הסתיימה או לא נמצאה.',
         'not_member': '❌ עליך להצטרף לערוץ/לקבוצה של ההגרלה לפני ההרשמה.',
         'removed_left': "🚫 <b>הוסרת מההגרלה</b>\nעזבת את {title} - כדי להשתתף שוב, הצטרף בחזרה לפני שההגרלה מסתיימת.",
-        'winner_notice': "🎉 <b>מזל טוב, זכית בהגרלה!</b>\nמגיע לך {months} חודשי פרימיום לטלגרם - שולחים לך את זה עכשיו... 🎁",
-        'gift_delay_fail': "⚠️ <b>מצטערים!</b> הייתה תקלה טכנית בשליחת הפרימיום. הצוות קיבל התראה ויטפל בזה איתך ישירות בהקדם.",
-        'unreachable': "🚫 לא ניתן ליצור קשר (חסם/לא הפעיל את הבוט) - לא נשלח פרס",
-        'gift_failed': "❌ שליחת הפרימיום נכשלה: {err}",
+        'winner_notice': "🎉 <b>מזל טוב, זכית בהגרלה!</b>\nמגיע לך {months} חודשי פרימיום לטלגרם 🎁",
         'no_participants': "😔 לא היו משתתפים בהגרלה.",
+        'winners_pending': "⏳ המנצחים בטיפול, יעודכן בקרוב.",
         'ended': (
             "🎊 <b>ההגרלה הסתיימה!</b> 🎊\n\n"
             "👥 סה'כ משתתפים: {count}\n\n"
@@ -51,11 +49,9 @@ TEXTS = {
         'not_found': "❌ This giveaway has ended or doesn't exist.",
         'not_member': "❌ You need to join the giveaway's channel/group before registering.",
         'removed_left': "🚫 <b>You were removed from the giveaway</b>\nYou left {title} - to join again, come back before the giveaway ends.",
-        'winner_notice': "🎉 <b>Congratulations, you won the giveaway!</b>\nYou're getting {months} months of Telegram Premium - sending it now... 🎁",
-        'gift_delay_fail': "⚠️ <b>Sorry!</b> There was a technical issue sending your Premium. Our team was notified and will follow up with you directly soon.",
-        'unreachable': "🚫 Unreachable (blocked/never started the bot) - no prize sent",
-        'gift_failed': "❌ Sending Premium failed: {err}",
+        'winner_notice': "🎉 <b>Congratulations, you won the giveaway!</b>\nYou're getting {months} months of Telegram Premium 🎁",
         'no_participants': "😔 No one joined this giveaway.",
+        'winners_pending': "⏳ Winners are being processed, will be updated soon.",
         'ended': (
             "🎊 <b>The giveaway has ended!</b> 🎊\n\n"
             "👥 Total participants: {count}\n\n"
@@ -199,76 +195,140 @@ async def handle_giveaway_member_left(client, update):
             pass
 
 
+UNREACHABLE_MARKERS = ('blocked', 'not found', 'deactivated', 'chat not found', 'peer_id_invalid', 'user_id_invalid')
+
+
+async def _attempt_gift(uid, giveaway):
+    """Tries to gift premium to uid. Returns (status, detail):
+    'ok' - gifted successfully.
+    'unreachable' - bot can't message this user at all (blocked/never started) - not admin-fixable.
+    'held' - gift itself failed (e.g. not enough stars) - admin-fixable, needs manual retry."""
+    from .pay import gift_premium_subscription
+    try:
+        await gift_premium_subscription(uid, giveaway['months'], text="🎉")
+        return 'ok', None
+    except Exception as e:
+        err = str(e)
+        if any(marker in err.lower() for marker in UNREACHABLE_MARKERS):
+            return 'unreachable', err
+        return 'held', err
+
+
+def _retry_markup(giveaway_id, uid):
+    return InlineKeyboardMarkup([[InlineKeyboardButton('📤 שלח עכשיו', callback_data=f"garetry_{giveaway_id}:{uid}")]])
+
+
+def _winners_announce_text(giveaway):
+    winners = giveaway.get('winners', [])
+    if winners:
+        winners_text = "\n".join(f"🏆 <a href='tg://user?id={uid}'>{uid}</a>" for uid in winners)
+    elif giveaway.get('pending_gifts'):
+        winners_text = _t(giveaway, 'winners_pending')
+    else:
+        winners_text = _t(giveaway, 'no_participants')
+    return _t(giveaway, 'ended').format(count=len(giveaway.get('participants', [])), winners_text=winners_text)
+
+
+async def _publish_ended_announcement(client, giveaway):
+    text = _winners_announce_text(giveaway)
+    if giveaway.get('message_id'):
+        try:
+            return await client.edit_message_text(giveaway['chat_id'], giveaway['message_id'], text)
+        except Exception:
+            pass
+    try:
+        await client.send_message(giveaway['chat_id'], text)
+    except Exception:
+        pass
+
+
 async def draw_giveaway(client, giveaway):
     """
-    For each candidate: notify them by DM FIRST that they won, before actually
-    gifting - this both confirms the bot can reach them and guarantees they're
-    told about the prize before it's sent. If the notice fails (blocked bot /
-    never started it) or the gift itself fails, that candidate is skipped and
-    a replacement is drawn from the remaining pool, so a prize is never wasted
-    on someone who can't receive it.
+    Draws winners without ever telling a candidate they won until the gift is
+    actually confirmed. If a candidate is unreachable (blocked bot / never
+    started it) that's nothing an admin can fix, so they're skipped and a
+    replacement is drawn. If the gift itself fails (e.g. not enough stars),
+    that's admin-fixable: the slot is held (not redrawn) and the admins get a
+    "send now" button to retry once there's enough balance - the winner is
+    never notified until it actually succeeds.
     """
-    from .pay import gift_premium_subscription
-
     giveaway_id = giveaway['_id']
     participants = giveaway.get('participants', [])
     pool = list(participants)
     random.shuffle(pool)
     target = giveaway['winner_count']
 
-    results = []  # (uid, ok, reason, detail)
-    while pool and sum(1 for r in results if r[1]) < target:
+    confirmed = []
+    held = []  # [{'uid': ..., 'error': ...}]
+
+    while pool and (len(confirmed) + len(held)) < target:
         uid = pool.pop()
+        status, err = await _attempt_gift(uid, giveaway)
+        if status == 'unreachable':
+            continue
+        if status == 'held':
+            held.append({'uid': uid, 'error': err})
+            continue
+        confirmed.append(uid)
         try:
             await client.send_message(uid, _t(giveaway, 'winner_notice').format(months=giveaway['months']))
-        except Exception as e:
-            results.append((uid, False, 'unreachable', str(e)))
-            continue
+        except Exception:
+            pass
 
+    await db.finish_giveaway(giveaway_id, confirmed)
+    if held:
+        await db.set_giveaway_pending(giveaway_id, held)
+
+    giveaway = await db.get_giveaway(giveaway_id)
+    await _publish_ended_announcement(client, giveaway)
+
+    announce = _winners_announce_text(giveaway)
+    for admin_id in ADMINS:
         try:
-            await gift_premium_subscription(uid, giveaway['months'], text="🎉")
-            results.append((uid, True, None, None))
-        except Exception as e:
-            results.append((uid, False, 'gift_failed', str(e)))
+            await client.send_message(admin_id, f"🎉 <b>הגרלה הסתיימה</b>\n\n{announce}")
+        except Exception:
+            pass
+        for h in held:
             try:
-                await client.send_message(uid, _t(giveaway, 'gift_delay_fail'))
+                await client.send_message(
+                    admin_id,
+                    f"⚠️ <b>לא ניתן לשלוח פרימיום למנצח <code>{h['uid']}</code>:</b>\n{h['error']}\n\n"
+                    "הזוכה עדיין לא קיבל שום הודעה על זכייתו. לחץ לנסות לשלוח שוב כשתהיה יתרת כוכבים מספקת:",
+                    reply_markup=_retry_markup(giveaway_id, h['uid'])
+                )
             except Exception:
                 pass
 
-    await db.finish_giveaway(giveaway_id, [uid for uid, ok, *_ in results if ok])
+    return confirmed, held
 
-    winning_results = [r for r in results if r[1]]
-    if winning_results:
-        winners_text = "\n".join(f"🏆 <a href='tg://user?id={uid}'>{uid}</a>" for uid, ok, *_ in winning_results)
-    else:
-        winners_text = _t(giveaway, 'no_participants')
 
-    announce = _t(giveaway, 'ended').format(count=len(participants), winners_text=winners_text)
+@Client.on_callback_query(filters.regex(r"^garetry_"))
+async def handle_giveaway_retry_gift(client, query: CallbackQuery):
+    if query.from_user.id not in ADMINS:
+        return await query.answer("⛔ למנהלים בלבד.", show_alert=True)
 
+    giveaway_id, uid_str = query.data[len("garetry_"):].split(":")
+    uid = int(uid_str)
+    giveaway = await db.get_giveaway(giveaway_id)
+    if not giveaway:
+        return await query.answer("ההגרלה לא נמצאה.", show_alert=True)
+
+    status, err = await _attempt_gift(uid, giveaway)
+    if status != 'ok':
+        return await query.message.edit_text(
+            f"❌ עדיין נכשל לשלוח למנצח <code>{uid}</code>:\n{err}",
+            reply_markup=_retry_markup(giveaway_id, uid)
+        )
+
+    await db.resolve_giveaway_pending(giveaway_id, uid)
     try:
-        await client.edit_message_text(giveaway['chat_id'], giveaway['message_id'], announce)
+        await client.send_message(uid, _t(giveaway, 'winner_notice').format(months=giveaway['months']))
     except Exception:
-        try:
-            await client.send_message(giveaway['chat_id'], announce)
-        except Exception:
-            pass
+        pass
 
-    failed_results = [r for r in results if not r[1]]
-    admin_report = f"🎉 <b>הגרלה הסתיימה</b>\n\n{announce}"
-    if failed_results:
-        lines = []
-        for uid, ok, reason, detail in failed_results:
-            reason_text = _t(giveaway, 'unreachable') if reason == 'unreachable' else _t(giveaway, 'gift_failed').format(err=detail)
-            lines.append(f"• <code>{uid}</code>: {reason_text}")
-        admin_report += "\n\n⚠️ <b>מועמדים שדולגו (לא נשלח להם פרס):</b>\n" + "\n".join(lines)
-
-    for admin_id in ADMINS:
-        try:
-            await client.send_message(admin_id, admin_report)
-        except Exception:
-            pass
-
-    return results
+    giveaway = await db.get_giveaway(giveaway_id)
+    await _publish_ended_announcement(client, giveaway)
+    await query.message.edit_text(f"✅ נשלח בהצלחה למנצח <code>{uid}</code>.")
 
 
 async def giveaway_watcher_loop(app):
