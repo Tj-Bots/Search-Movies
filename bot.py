@@ -4,6 +4,7 @@ import os
 from pyrogram import Client, idle
 from config import API_ID, API_HASH, BOT_TOKEN, LOG_CHANNEL
 from database import db
+from Tj_Bots.giveaway import giveaway_watcher_loop
 
 logging.basicConfig(
     level=logging.ERROR,
@@ -22,7 +23,8 @@ async def start_bot():
     print("🤖 הבוט מתחיל לעבוד...")
     await app.start()
     await db.init_database(app)
-    
+    asyncio.create_task(giveaway_watcher_loop(app))
+
     if os.path.exists("restart.txt"):
         try:
             with open("restart.txt", "r") as f:

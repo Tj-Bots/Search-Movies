@@ -1,6 +1,7 @@
 import motor.motor_asyncio
 import re
 import time
+import uuid
 from pymongo.errors import DuplicateKeyError, BulkWriteError
 from config import MONGO_URI, DB_NAME
 
@@ -21,6 +22,7 @@ class Database:
         self.user_search_log = None
         self.support_threads = None
         self.sub_admins = None
+        self.giveaways = None
 
     async def init_database(self, bot):
         me = await bot.get_me()
@@ -38,6 +40,7 @@ class Database:
         self.user_search_log = self.db[f"{prefix}_user_search_log"]
         self.support_threads = self.db[f"{prefix}_support_threads"]
         self.sub_admins = self.db[f"{prefix}_sub_admins"]
+        self.giveaways = self.db[f"{prefix}_giveaways"]
 
         try:
             await self.files.create_index('file_unique_id', unique=True)
@@ -435,5 +438,38 @@ class Database:
     async def get_all_sub_admins(self):
         if self.sub_admins is None: return []
         return await self.sub_admins.find({}).to_list(length=1000)
+
+    async def create_giveaway(self, data):
+        data['_id'] = uuid.uuid4().hex[:10]
+        data.setdefault('participants', [])
+        data.setdefault('ended', False)
+        data.setdefault('winners', [])
+        await self.giveaways.insert_one(data)
+        return data['_id']
+
+    async def get_giveaway(self, giveaway_id):
+        if self.giveaways is None: return None
+        return await self.giveaways.find_one({'_id': giveaway_id})
+
+    async def set_giveaway_message(self, giveaway_id, message_id):
+        await self.giveaways.update_one({'_id': giveaway_id}, {'$set': {'message_id': message_id}})
+
+    async def join_giveaway(self, giveaway_id, user_id):
+        result = await self.giveaways.update_one(
+            {'_id': giveaway_id, 'ended': False, 'participants': {'$ne': user_id}},
+            {'$push': {'participants': user_id}}
+        )
+        return result.modified_count > 0
+
+    async def get_due_giveaways(self):
+        if self.giveaways is None: return []
+        return await self.giveaways.find({'ended': False, 'end_time': {'$lte': time.time()}}).to_list(length=100)
+
+    async def get_active_giveaways(self):
+        if self.giveaways is None: return []
+        return await self.giveaways.find({'ended': False}).sort('end_time', 1).to_list(length=100)
+
+    async def finish_giveaway(self, giveaway_id, winners):
+        await self.giveaways.update_one({'_id': giveaway_id}, {'$set': {'ended': True, 'winners': winners}})
 
 db = Database()

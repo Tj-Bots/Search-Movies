@@ -17,6 +17,7 @@ GROUP_LIST_SORT = {}
 MCH_WIZARD = {}
 GIFT_PREM_WIZARD = {}
 SUBADMIN_WIZARD = {}
+GIVEAWAY_WIZARD = {}
 USERS_PER_PAGE = 10
 
 DURATION_PRESETS = {
@@ -85,6 +86,11 @@ PROMPTS = {
         "(הבוט חייב להיות חבר, כאדמין עם הרשאת הזמנת משתמשים, כדי ליצור קישור הזמנה)"
     ), 'back': 'authchannel'},
     'giftprem_target': {'label': 'בחירת משתמש למתנת פרימיום', 'prompt': "שלח את מזהה (ID) המשתמש שיקבל את הפרימיום.", 'back': 'giftprem'},
+    'giveaway_target': {'label': 'בחירת ערוץ/קבוצה להגרלה', 'prompt': (
+        "שלח את מזהה (ID) הערוץ/קבוצה בו תתפרסם הודעת ההגרלה.\n"
+        "לדוגמה: <code>-1001234567890</code>\n"
+        "(הבוט חייב להיות חבר שם, כאדמין עם הרשאת פרסום הודעות)"
+    ), 'back': 'giveaway'},
     'add_word': {'label': 'הוספת מילה חסומה', 'prompt': "שלח את המילה/הביטוי שברצונך לחסום מחיפוש.", 'back': 'words'},
     'del_word': {'label': 'הסרת מילה חסומה', 'prompt': "שלח את המילה שברצונך להסיר מהחסימה.", 'back': 'words'},
     'find_user': {'label': 'איתור משתמש', 'prompt': "שלח מזהה (ID) או שם משתמש לחיפוש.", 'back': 'users'},
@@ -861,6 +867,64 @@ async def admin_text_input(client, message):
             panel_chat, panel_msg, caption="⏳ <b>בחר משך זמן:</b>", reply_markup=_giftprem_duration_markup()
         )
 
+    if action == 'giveaway_target':
+        wizard = GIVEAWAY_WIZARD.get(admin_id)
+        if not wizard or 'length_seconds' not in wizard:
+            return await client.edit_message_caption(panel_chat, panel_msg, caption="❌ הפעולה פגה, התחל מחדש.", reply_markup=_back_markup('adm_giveaway_menu'))
+
+        try:
+            chat_id = int(text_in)
+        except ValueError:
+            return await client.edit_message_caption(panel_chat, panel_msg, caption="❌ מזהה לא תקין.", reply_markup=_back_markup('adm_giveaway_menu'))
+
+        try:
+            chat = await client.get_chat(chat_id)
+        except Exception as e:
+            return await client.edit_message_caption(panel_chat, panel_msg, caption=f"❌ לא ניתן לגשת לצ'אט: {e}", reply_markup=_back_markup('adm_giveaway_menu'))
+
+        from .pay import PREMIUM_GIFT_OPTIONS
+        wizard['chat_id'] = chat_id
+        wizard['chat_title'] = chat.title or chat.first_name or str(chat_id)
+        stars_cost = PREMIUM_GIFT_OPTIONS[wizard['months']] * wizard['winner_count']
+        length_label = next((lbl for lbl, secs in GA_LENGTH_OPTIONS if secs == wizard['length_seconds']), f"{wizard['length_seconds']} שניות")
+
+        summary = (
+            "📋 <b>סיכום ההגרלה:</b>\n\n"
+            f"🎁 פרס: {wizard['months']} חודשי פרימיום\n"
+            f"🏆 מנצחים: {wizard['winner_count']}\n"
+            f"⏰ משך: {length_label}\n"
+            f"💬 מתפרסם ב: {wizard['chat_title']}\n"
+            f"⭐ עלות כוללת מהיתרה (אם יהיו מספיק משתתפים): {stars_cost} ⭐"
+        )
+
+        async def _do_create():
+            from .giveaway import post_giveaway
+            giveaway_id = await db.create_giveaway({
+                'months': wizard['months'],
+                'winner_count': wizard['winner_count'],
+                'end_time': time.time() + wizard['length_seconds'],
+                'chat_id': wizard['chat_id'],
+                'created_by': admin_id,
+                'created_at': time.time(),
+            })
+            giveaway = await db.get_giveaway(giveaway_id)
+            try:
+                await post_giveaway(client, giveaway_id, giveaway)
+                note = f"✅ ההגרלה פורסמה ב-{wizard['chat_title']}!"
+            except Exception as e:
+                note = f"❌ הפרסום נכשל: {e}"
+            GIVEAWAY_WIZARD.pop(admin_id, None)
+            text, markup = await _giveaway_menu_text_markup()
+            await client.edit_message_caption(panel_chat, panel_msg, caption=f"{note}\n\n{text}", reply_markup=markup)
+
+        async def _cancel_create():
+            GIVEAWAY_WIZARD.pop(admin_id, None)
+            text, markup = await _giveaway_menu_text_markup()
+            await client.edit_message_caption(panel_chat, panel_msg, caption=text, reply_markup=markup)
+
+        PENDING_CONFIRM[admin_id] = {'confirm': _do_create, 'cancel': _cancel_create}
+        return await client.edit_message_caption(panel_chat, panel_msg, caption=f"⚠️ <b>אישור פעולה</b>\n\n{summary}", reply_markup=_confirm_markup())
+
     if action == 'subadmin_add_id':
         try:
             target_id = int(text_in)
@@ -1058,6 +1122,89 @@ def _giftprem_duration_markup():
     ]
     keyboard.append([InlineKeyboardButton('❌ ביטול', callback_data='adm_giftprem_menu', style=enums.ButtonStyle.DANGER)])
     return InlineKeyboardMarkup(keyboard)
+
+
+# ---------- giveaways ----------
+
+GA_LENGTH_OPTIONS = [('שעה', 3600), ('6 שעות', 6 * 3600), ('12 שעות', 12 * 3600), ('24 שעות', 86400), ('3 ימים', 3 * 86400), ('שבוע', 7 * 86400)]
+GA_WINNER_OPTIONS = [1, 2, 3, 5, 10]
+
+
+def _ga_months_markup():
+    from .pay import PREMIUM_GIFT_OPTIONS
+    keyboard = [
+        [InlineKeyboardButton(f"{months} חודשים - {stars} ⭐ למנצח", callback_data=f'adm_ga_months_{months}')]
+        for months, stars in PREMIUM_GIFT_OPTIONS.items()
+    ]
+    keyboard.append([InlineKeyboardButton('❌ ביטול', callback_data='adm_giveaway_menu', style=enums.ButtonStyle.DANGER)])
+    return InlineKeyboardMarkup(keyboard)
+
+
+def _ga_winners_markup():
+    keyboard = [
+        [InlineKeyboardButton(f"{n} מנצחים", callback_data=f'adm_ga_winners_{n}') for n in GA_WINNER_OPTIONS[i:i + 2]]
+        for i in range(0, len(GA_WINNER_OPTIONS), 2)
+    ]
+    keyboard.append([InlineKeyboardButton('❌ ביטול', callback_data='adm_giveaway_menu', style=enums.ButtonStyle.DANGER)])
+    return InlineKeyboardMarkup(keyboard)
+
+
+def _ga_length_markup():
+    keyboard = [
+        [InlineKeyboardButton(label, callback_data=f'adm_ga_length_{secs}') for label, secs in GA_LENGTH_OPTIONS[i:i + 2]]
+        for i in range(0, len(GA_LENGTH_OPTIONS), 2)
+    ]
+    keyboard.append([InlineKeyboardButton('❌ ביטול', callback_data='adm_giveaway_menu', style=enums.ButtonStyle.DANGER)])
+    return InlineKeyboardMarkup(keyboard)
+
+
+async def _giveaway_menu_text_markup():
+    active = await db.get_active_giveaways()
+    text = (
+        "🎉 <b>הגרלות פרימיום בערוץ</b>\n\n"
+        "<blockquote>הבוט מפרסם הודעת הגרלה עם כפתור הצטרפות, ובסיום בוחר מנצחים אקראית ומעניק להם פרימיום מיתרת הכוכבים.</blockquote>\n\n"
+    )
+    keyboard = []
+    if active:
+        text += "🟢 <b>הגרלות פעילות:</b>"
+        for g in active:
+            remaining = max(int(g['end_time'] - time.time()), 0)
+            hours = remaining // 3600
+            keyboard.append([InlineKeyboardButton(
+                f"🎉 {g['months']} ח׳, {len(g.get('participants', []))} משתתפים, נותרו {hours} ש'",
+                callback_data=f"adm_ga_view_{g['_id']}"
+            )])
+    else:
+        text += "אין כרגע הגרלות פעילות."
+    keyboard.append([InlineKeyboardButton('➕ הגרלה חדשה', callback_data='adm_ga_new', style=enums.ButtonStyle.SUCCESS)])
+    keyboard.append([InlineKeyboardButton('חזרה ⋟', callback_data='adm_stars', style=enums.ButtonStyle.PRIMARY)])
+    return text, InlineKeyboardMarkup(keyboard)
+
+
+async def _ga_view_text_markup(giveaway_id):
+    giveaway = await db.get_giveaway(giveaway_id)
+    if not giveaway:
+        return None, None
+    ended = giveaway.get('ended')
+    if ended:
+        status = f"🔴 הסתיימה ({len(giveaway.get('winners', []))} מנצחים)"
+    else:
+        remaining = max(int(giveaway['end_time'] - time.time()), 0)
+        status = f"🟢 פעילה (נותרו {remaining // 3600} ש' {(remaining % 3600) // 60} ד')"
+    text = (
+        "🎉 <b>פרטי הגרלה</b>\n\n"
+        f"🎁 פרס: {giveaway['months']} חודשי פרימיום\n"
+        f"🏆 מנצחים: {giveaway['winner_count']}\n"
+        f"👥 משתתפים: {len(giveaway.get('participants', []))}\n"
+        f"💬 צ'אט: <code>{giveaway['chat_id']}</code>\n"
+        f"📌 סטטוס: {status}"
+    )
+    keyboard = []
+    if not ended:
+        keyboard.append([InlineKeyboardButton('🎲 הכרז על מנצחים עכשיו', callback_data=f'adm_ga_draw_{giveaway_id}', style=enums.ButtonStyle.SUCCESS)])
+        keyboard.append([InlineKeyboardButton('🗑 בטל הגרלה', callback_data=f'adm_ga_cancel_{giveaway_id}', style=enums.ButtonStyle.DANGER)])
+    keyboard.append([InlineKeyboardButton('חזרה ⋟', callback_data='adm_giveaway_menu', style=enums.ButtonStyle.PRIMARY)])
+    return text, InlineKeyboardMarkup(keyboard)
 
 
 # ---------- sub-admins ----------
@@ -1752,12 +1899,12 @@ async def admin_callback(client, query):
     if data == "adm_stars":
         from .pay import build_purchase_stats_text
         text = await build_purchase_stats_text()
-        markup = InlineKeyboardMarkup([
-            [InlineKeyboardButton('⚙️ הגדרות תשלומים', callback_data='adm_payments_menu', style=enums.ButtonStyle.PRIMARY)],
-            [InlineKeyboardButton('🎁 מתנת פרימיום מהיתרה', callback_data='adm_giftprem_menu', style=enums.ButtonStyle.SUCCESS)],
-            [InlineKeyboardButton('חזרה ⋟', callback_data='adm_home', style=enums.ButtonStyle.PRIMARY)],
-        ])
-        return await query.message.edit_caption(text, reply_markup=markup)
+        rows = [[InlineKeyboardButton('⚙️ הגדרות תשלומים', callback_data='adm_payments_menu', style=enums.ButtonStyle.PRIMARY)]]
+        if admin_id in ADMINS:
+            rows.append([InlineKeyboardButton('🎁 מתנת פרימיום מהיתרה', callback_data='adm_giftprem_menu', style=enums.ButtonStyle.SUCCESS)])
+            rows.append([InlineKeyboardButton('🎉 הגרלות פרימיום', callback_data='adm_giveaway_menu', style=enums.ButtonStyle.SUCCESS)])
+        rows.append([InlineKeyboardButton('חזרה ⋟', callback_data='adm_home', style=enums.ButtonStyle.PRIMARY)])
+        return await query.message.edit_caption(text, reply_markup=InlineKeyboardMarkup(rows))
 
     if data == "adm_giftprem_menu":
         GIFT_PREM_WIZARD.pop(admin_id, None)
@@ -1803,6 +1950,78 @@ async def admin_callback(client, query):
             query, f"לתת ל-<code>{target_id}</code> פרימיום ל-{months} חודשים תמורת {stars} ⭐ מיתרת הבוט?",
             _do_giftprem, _cancel_giftprem
         )
+
+    if data == "adm_giveaway_menu":
+        GIVEAWAY_WIZARD.pop(admin_id, None)
+        text, markup = await _giveaway_menu_text_markup()
+        return await query.message.edit_caption(text, reply_markup=markup)
+
+    if data == "adm_ga_new":
+        GIVEAWAY_WIZARD[admin_id] = {}
+        return await query.message.edit_caption("🎁 <b>בחר כמה חודשי פרימיום יקבל כל מנצח:</b>", reply_markup=_ga_months_markup())
+
+    if data.startswith("adm_ga_months_"):
+        wizard = GIVEAWAY_WIZARD.setdefault(admin_id, {})
+        wizard['months'] = int(data[len("adm_ga_months_"):])
+        return await query.message.edit_caption("🏆 <b>בחר כמה מנצחים יהיו בהגרלה:</b>", reply_markup=_ga_winners_markup())
+
+    if data.startswith("adm_ga_winners_"):
+        wizard = GIVEAWAY_WIZARD.get(admin_id)
+        if not wizard or 'months' not in wizard:
+            return await query.answer("הפעולה פגה, התחל מחדש.", show_alert=True)
+        wizard['winner_count'] = int(data[len("adm_ga_winners_"):])
+        return await query.message.edit_caption("⏰ <b>בחר כמה זמן ההגרלה תהיה פתוחה:</b>", reply_markup=_ga_length_markup())
+
+    if data.startswith("adm_ga_length_"):
+        wizard = GIVEAWAY_WIZARD.get(admin_id)
+        if not wizard or 'winner_count' not in wizard:
+            return await query.answer("הפעולה פגה, התחל מחדש.", show_alert=True)
+        wizard['length_seconds'] = int(data[len("adm_ga_length_"):])
+        return await _start_input(query, "giveaway_target")
+
+    if data.startswith("adm_ga_view_"):
+        giveaway_id = data[len("adm_ga_view_"):]
+        text, markup = await _ga_view_text_markup(giveaway_id)
+        if text is None:
+            text, markup = await _giveaway_menu_text_markup()
+        return await query.message.edit_caption(text, reply_markup=markup)
+
+    if data.startswith("adm_ga_draw_"):
+        giveaway_id = data[len("adm_ga_draw_"):]
+
+        async def _do_draw():
+            from .giveaway import draw_giveaway
+            giveaway = await db.get_giveaway(giveaway_id)
+            if giveaway and not giveaway.get('ended'):
+                await draw_giveaway(client, giveaway)
+            text, markup = await _giveaway_menu_text_markup()
+            await query.message.edit_caption(f"✅ ההגרלה הוכרעה.\n\n{text}", reply_markup=markup)
+
+        async def _cancel_draw():
+            text, markup = await _ga_view_text_markup(giveaway_id)
+            await query.message.edit_caption(text, reply_markup=markup)
+
+        return await _ask_confirm(query, "להכריז על מנצחים עכשיו ולסיים את ההגרלה מוקדם?", _do_draw, _cancel_draw)
+
+    if data.startswith("adm_ga_cancel_"):
+        giveaway_id = data[len("adm_ga_cancel_"):]
+
+        async def _do_cancel_ga():
+            giveaway = await db.get_giveaway(giveaway_id)
+            await db.finish_giveaway(giveaway_id, [])
+            if giveaway and giveaway.get('message_id'):
+                try:
+                    await client.edit_message_text(giveaway['chat_id'], giveaway['message_id'], "🚫 <b>ההגרלה בוטלה על ידי הצוות.</b>")
+                except Exception:
+                    pass
+            text, markup = await _giveaway_menu_text_markup()
+            await query.message.edit_caption(f"🗑 ההגרלה בוטלה.\n\n{text}", reply_markup=markup)
+
+        async def _cancel_cancel_ga():
+            text, markup = await _ga_view_text_markup(giveaway_id)
+            await query.message.edit_caption(text, reply_markup=markup)
+
+        return await _ask_confirm(query, "לבטל את ההגרלה? לא יוכרזו מנצחים.", _do_cancel_ga, _cancel_cancel_ga)
 
     if data == "adm_stats":
         text = await _admin_stats_text()
@@ -1853,7 +2072,7 @@ async def _start_input(query, action):
     info = PROMPTS[action]
     admin_id = query.from_user.id
     ADM_INPUT[admin_id] = {'action': action, 'panel_chat': query.message.chat.id, 'panel_msg': query.message.id}
-    back_targets = {'ban': 'adm_ban_menu', 'authchannel': 'adm_authchannel_menu', 'words': 'adm_words_menu', 'users': 'adm_users_1', 'groups': 'adm_groups_1', 'channels': 'adm_channels_menu', 'payments': 'adm_payments_menu', 'giftprem': 'adm_giftprem_menu'}
+    back_targets = {'ban': 'adm_ban_menu', 'authchannel': 'adm_authchannel_menu', 'words': 'adm_words_menu', 'users': 'adm_users_1', 'groups': 'adm_groups_1', 'channels': 'adm_channels_menu', 'payments': 'adm_payments_menu', 'giftprem': 'adm_giftprem_menu', 'giveaway': 'adm_giveaway_menu'}
     markup = InlineKeyboardMarkup([[InlineKeyboardButton('❌ ביטול', callback_data=back_targets[info['back']])]])
     text = f"✏️ <b>{info['label']}</b>\n\n{info['prompt']}"
     await query.message.edit_caption(text, reply_markup=markup)
