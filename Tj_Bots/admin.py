@@ -869,7 +869,7 @@ async def admin_text_input(client, message):
 
     if action == 'giveaway_target':
         wizard = GIVEAWAY_WIZARD.get(admin_id)
-        if not wizard or 'length_seconds' not in wizard:
+        if not wizard or 'lang' not in wizard:
             return await client.edit_message_caption(panel_chat, panel_msg, caption="❌ הפעולה פגה, התחל מחדש.", reply_markup=_back_markup('adm_giveaway_menu'))
 
         try:
@@ -887,12 +887,14 @@ async def admin_text_input(client, message):
         wizard['chat_title'] = chat.title or chat.first_name or str(chat_id)
         stars_cost = PREMIUM_GIFT_OPTIONS[wizard['months']] * wizard['winner_count']
         length_label = next((lbl for lbl, secs in GA_LENGTH_OPTIONS if secs == wizard['length_seconds']), f"{wizard['length_seconds']} שניות")
+        lang_label = 'עברית' if wizard['lang'] == 'he' else 'English'
 
         summary = (
             "📋 <b>סיכום ההגרלה:</b>\n\n"
             f"🎁 פרס: {wizard['months']} חודשי פרימיום\n"
             f"🏆 מנצחים: {wizard['winner_count']}\n"
             f"⏰ משך: {length_label}\n"
+            f"🌍 שפת ההודעה: {lang_label}\n"
             f"💬 מתפרסם ב: {wizard['chat_title']}\n"
             f"⭐ עלות כוללת מהיתרה (אם יהיו מספיק משתתפים): {stars_cost} ⭐"
         )
@@ -904,6 +906,7 @@ async def admin_text_input(client, message):
                 'winner_count': wizard['winner_count'],
                 'end_time': time.time() + wizard['length_seconds'],
                 'chat_id': wizard['chat_id'],
+                'lang': wizard['lang'],
                 'created_by': admin_id,
                 'created_at': time.time(),
             })
@@ -1156,6 +1159,14 @@ def _ga_length_markup():
     ]
     keyboard.append([InlineKeyboardButton('❌ ביטול', callback_data='adm_giveaway_menu', style=enums.ButtonStyle.DANGER)])
     return InlineKeyboardMarkup(keyboard)
+
+
+def _ga_lang_markup():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton('🇮🇱 עברית', callback_data='adm_ga_lang_he'),
+         InlineKeyboardButton('🇬🇧 English', callback_data='adm_ga_lang_en')],
+        [InlineKeyboardButton('❌ ביטול', callback_data='adm_giveaway_menu', style=enums.ButtonStyle.DANGER)],
+    ])
 
 
 async def _giveaway_menu_text_markup():
@@ -1977,6 +1988,13 @@ async def admin_callback(client, query):
         if not wizard or 'winner_count' not in wizard:
             return await query.answer("הפעולה פגה, התחל מחדש.", show_alert=True)
         wizard['length_seconds'] = int(data[len("adm_ga_length_"):])
+        return await query.message.edit_caption("🌍 <b>באיזו שפה תתפרסם הודעת ההגרלה?</b>", reply_markup=_ga_lang_markup())
+
+    if data.startswith("adm_ga_lang_"):
+        wizard = GIVEAWAY_WIZARD.get(admin_id)
+        if not wizard or 'length_seconds' not in wizard:
+            return await query.answer("הפעולה פגה, התחל מחדש.", show_alert=True)
+        wizard['lang'] = data[len("adm_ga_lang_"):]
         return await _start_input(query, "giveaway_target")
 
     if data.startswith("adm_ga_view_"):
@@ -2007,11 +2025,12 @@ async def admin_callback(client, query):
         giveaway_id = data[len("adm_ga_cancel_"):]
 
         async def _do_cancel_ga():
+            from .giveaway import cancelled_text
             giveaway = await db.get_giveaway(giveaway_id)
             await db.finish_giveaway(giveaway_id, [])
             if giveaway and giveaway.get('message_id'):
                 try:
-                    await client.edit_message_text(giveaway['chat_id'], giveaway['message_id'], "🚫 <b>ההגרלה בוטלה על ידי הצוות.</b>")
+                    await client.edit_message_text(giveaway['chat_id'], giveaway['message_id'], cancelled_text(giveaway))
                 except Exception:
                     pass
             text, markup = await _giveaway_menu_text_markup()
