@@ -1,6 +1,7 @@
 import asyncio
 import time
 import re
+import uuid
 from pyrogram import Client, filters, enums
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from pyrogram.errors import FloodWait
@@ -8,6 +9,7 @@ from config import ADMINS
 from database import db
 
 INDEX_PROGRESS = {}
+PENDING_INDEX_REQUESTS = {}
 
 LINK_REGEX = r"(?:https?://)?(?:t\.me|telegram\.me)/(?:c/)?([\w\d]+)/(\d+)"
 
@@ -159,6 +161,96 @@ async def index_handler(client, message):
             quote=True
         )
     await start_indexing(client, message, args[1])
+
+
+@Client.on_message(filters.command("index") & ~filters.user(ADMINS))
+async def index_request_handler(client, message):
+    if not message.from_user:
+        return
+
+    args = message.text.split(maxsplit=1)
+    if len(args) < 2:
+        return await message.reply(
+            "⚠️ **שימוש שגוי.**\n\n"
+            "פרמטרים: `/index [קישור] - [התחלה אופציונלי]`\n\n"
+            "דוגמה: `/index https://t.me/c/1234/1000`\n\n"
+            "הבוט חייב להיות מנהל בערוץ עם הרשאת הזמנת משתמשים.",
+            quote=True
+        )
+
+    full_arg = args[1]
+    try:
+        identifier, start_id, end_id = parse_index_arg(full_arg)
+    except ValueError as e:
+        return await message.reply(f"❌ {e}", quote=True)
+
+    chat_id = int(f"-100{identifier}") if identifier.isdigit() else identifier
+
+    try:
+        chat = await client.get_chat(chat_id)
+        invite_link = chat.invite_link or await client.export_chat_invite_link(chat_id)
+        if not invite_link:
+            raise ValueError("לבוט אין הרשאת הזמנת משתמשים בערוץ הזה.")
+    except Exception as e:
+        return await message.reply(
+            f"❌ לא ניתן לבקש אינדוקס לערוץ הזה.\nוודא שהבוט מנהל שם עם הרשאת הזמנת משתמשים.\nשגיאה: {e}",
+            quote=True
+        )
+
+    token = uuid.uuid4().hex[:10]
+    PENDING_INDEX_REQUESTS[token] = {
+        'full_arg': full_arg, 'chat_title': chat.title,
+        'requester_id': message.from_user.id,
+    }
+
+    await message.reply("📨 **הבקשה שלך להוספת קבצים מהערוץ נשלחה למנהלים לאישור.**", quote=True)
+
+    markup = InlineKeyboardMarkup([[
+        InlineKeyboardButton('✅ אשר', callback_data=f'idxreq_ok_{token}'),
+        InlineKeyboardButton('❌ בטל', callback_data=f'idxreq_no_{token}'),
+    ]])
+    for admin_id in ADMINS:
+        try:
+            await client.send_message(
+                admin_id,
+                "📥 <b>בקשת אינדוקס חדשה</b>\n\n"
+                f"👤 מבקש: {message.from_user.mention} (<code>{message.from_user.id}</code>)\n"
+                f"💬 ערוץ: <b>{chat.title}</b>\n"
+                f"🔗 קישור: <code>{full_arg}</code>",
+                reply_markup=markup
+            )
+        except Exception:
+            pass
+
+
+@Client.on_callback_query(filters.regex(r"^idxreq_"))
+async def index_request_callback(client, query):
+    if query.from_user.id not in ADMINS:
+        return await query.answer("⛔ למנהלים בלבד.", show_alert=True)
+
+    action, token = query.data[len("idxreq_"):].split("_", 1)
+    req = PENDING_INDEX_REQUESTS.pop(token, None)
+    if not req:
+        return await query.answer("הבקשה הזו כבר טופלה או פגה.", show_alert=True)
+
+    if action == "no":
+        await query.message.edit_text(f"❌ הבקשה מ-<code>{req['requester_id']}</code> נדחתה.")
+        try:
+            await client.send_message(req['requester_id'], "❌ **הבקשה שלך להוספת קבצים מהערוץ נדחתה.**")
+        except Exception:
+            pass
+        return
+
+    await query.message.edit_text(f"✅ הבקשה מ-<code>{req['requester_id']}</code> אושרה, מתחיל אינדוקס...")
+    try:
+        await client.send_message(
+            req['requester_id'],
+            f"✅ **הבקשה שלך אושרה!** מתחילים לאסוף תוכן מ-<b>{req['chat_title']}</b>..."
+        )
+    except Exception:
+        pass
+
+    await start_indexing(client, query.message, req['full_arg'])
 
 
 @Client.on_callback_query(filters.regex(r"^stop_idx_"))
