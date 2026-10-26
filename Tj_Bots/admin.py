@@ -885,6 +885,10 @@ async def admin_text_input(client, message):
         from .pay import PREMIUM_GIFT_OPTIONS
         wizard['chat_id'] = chat_id
         wizard['chat_title'] = chat.title or chat.first_name or str(chat_id)
+        try:
+            wizard['invite_url'] = f"https://t.me/{chat.username}" if chat.username else (chat.invite_link or await client.export_chat_invite_link(chat_id))
+        except Exception:
+            wizard['invite_url'] = None
         stars_cost = PREMIUM_GIFT_OPTIONS[wizard['months']] * wizard['winner_count']
         length_label = next((lbl for lbl, secs in GA_LENGTH_OPTIONS if secs == wizard['length_seconds']), f"{wizard['length_seconds']} שניות")
         lang_label = 'עברית' if wizard['lang'] == 'he' else 'English'
@@ -906,6 +910,8 @@ async def admin_text_input(client, message):
                 'winner_count': wizard['winner_count'],
                 'end_time': time.time() + wizard['length_seconds'],
                 'chat_id': wizard['chat_id'],
+                'chat_title': wizard['chat_title'],
+                'invite_url': wizard.get('invite_url'),
                 'lang': wizard['lang'],
                 'created_by': admin_id,
                 'created_at': time.time(),

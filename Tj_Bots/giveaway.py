@@ -23,6 +23,8 @@ TEXTS = {
         'already_joined': '✅ אתה כבר רשום להגרלה!',
         'joined_ok': '🎉 נרשמת בהצלחה להגרלה! בהצלחה 🍀',
         'not_found': '❌ ההגרלה הזו הסתיימה או לא נמצאה.',
+        'not_member': '❌ עליך להצטרף לערוץ/לקבוצה של ההגרלה לפני ההרשמה.',
+        'removed_left': "🚫 <b>הוסרת מההגרלה</b>\nעזבת את {title} - כדי להשתתף שוב, הצטרף בחזרה לפני שההגרלה מסתיימת.",
         'winner_notice': "🎉 <b>מזל טוב, זכית בהגרלה!</b>\nמגיע לך {months} חודשי פרימיום לטלגרם - שולחים לך את זה עכשיו... 🎁",
         'gift_delay_fail': "⚠️ <b>מצטערים!</b> הייתה תקלה טכנית בשליחת הפרימיום. הצוות קיבל התראה ויטפל בזה איתך ישירות בהקדם.",
         'unreachable': "🚫 לא ניתן ליצור קשר (חסם/לא הפעיל את הבוט) - לא נשלח פרס",
@@ -47,6 +49,8 @@ TEXTS = {
         'already_joined': "✅ You're already entered!",
         'joined_ok': '🎉 You successfully entered the giveaway! Good luck 🍀',
         'not_found': "❌ This giveaway has ended or doesn't exist.",
+        'not_member': "❌ You need to join the giveaway's channel/group before registering.",
+        'removed_left': "🚫 <b>You were removed from the giveaway</b>\nYou left {title} - to join again, come back before the giveaway ends.",
         'winner_notice': "🎉 <b>Congratulations, you won the giveaway!</b>\nYou're getting {months} months of Telegram Premium - sending it now... 🎁",
         'gift_delay_fail': "⚠️ <b>Sorry!</b> There was a technical issue sending your Premium. Our team was notified and will follow up with you directly soon.",
         'unreachable': "🚫 Unreachable (blocked/never started the bot) - no prize sent",
@@ -106,31 +110,60 @@ async def _update_giveaway_post(client, giveaway):
         pass
 
 
+def giveaway_result_text(status, giveaway):
+    key = {'ok': 'joined_ok', 'already': 'already_joined', 'not_member': 'not_member', 'not_found': 'not_found'}.get(status, 'not_found')
+    return _t(giveaway, key)
+
+
+def giveaway_result_markup(status, giveaway):
+    if status == 'not_member' and giveaway.get('invite_url'):
+        label = '📣 Join' if giveaway.get('lang') == 'en' else '📣 הצטרף'
+        return InlineKeyboardMarkup([[InlineKeyboardButton(label, url=giveaway['invite_url'])]])
+    return None
+
+
 async def register_giveaway_participant(client, giveaway_id, user_id):
-    """Registers user_id as a giveaway participant. Returns (ok, text) - the DM/alert text to show."""
+    """Registers user_id as a giveaway participant. Returns (status, giveaway) -
+    status is one of 'ok', 'already', 'not_member', 'not_found'."""
     giveaway = await db.get_giveaway(giveaway_id)
     if not giveaway or giveaway.get('ended'):
-        return False, _t(giveaway or {}, 'not_found')
+        return 'not_found', giveaway or {}
+
+    if user_id in giveaway.get('participants', []):
+        return 'already', giveaway
+
+    try:
+        await client.get_chat_member(giveaway['chat_id'], user_id)
+    except Exception:
+        return 'not_member', giveaway
 
     joined = await db.join_giveaway(giveaway_id, user_id)
     if not joined:
-        return False, _t(giveaway, 'already_joined')
+        return 'already', giveaway
 
     giveaway = await db.get_giveaway(giveaway_id)
     await _update_giveaway_post(client, giveaway)
-    return True, _t(giveaway, 'joined_ok')
+    return 'ok', giveaway
 
 
 @Client.on_callback_query(filters.regex(r"^ga_join_"))
 async def handle_giveaway_join(client, query: CallbackQuery):
     giveaway_id = query.data[len("ga_join_"):]
+    user_id = query.from_user.id
+
     giveaway = await db.get_giveaway(giveaway_id)
     if not giveaway or giveaway.get('ended'):
         return await query.answer(_t(giveaway or {}, 'not_found'), show_alert=True)
-
-    user_id = query.from_user.id
     if user_id in giveaway.get('participants', []):
         return await query.answer(_t(giveaway, 'already_joined'), show_alert=True)
+
+    try:
+        await client.get_chat_member(giveaway['chat_id'], user_id)
+    except Exception:
+        invite_url = giveaway.get('invite_url')
+        if invite_url:
+            return await query.answer(url=invite_url)
+        return await query.answer(_t(giveaway, 'not_member'), show_alert=True)
 
     try:
         await client.send_message(user_id, _t(giveaway, 'joined_ok'))
@@ -138,8 +171,32 @@ async def handle_giveaway_join(client, query: CallbackQuery):
         bot_username = client.me.username
         return await query.answer(url=f"https://t.me/{bot_username}?start=ga_{giveaway_id}")
 
-    ok, text = await register_giveaway_participant(client, giveaway_id, user_id)
-    await query.answer(text, show_alert=True)
+    status, giveaway = await register_giveaway_participant(client, giveaway_id, user_id)
+    await query.answer(giveaway_result_text(status, giveaway), show_alert=True)
+
+
+@Client.on_chat_member_updated()
+async def handle_giveaway_member_left(client, update):
+    new_status = update.new_chat_member.status if update.new_chat_member else None
+    if new_status not in (enums.ChatMemberStatus.LEFT, enums.ChatMemberStatus.BANNED):
+        return
+
+    user = (update.new_chat_member.user if update.new_chat_member else None) or \
+           (update.old_chat_member.user if update.old_chat_member else None)
+    if not user:
+        return
+
+    active = await db.get_active_giveaways()
+    for giveaway in active:
+        if giveaway['chat_id'] != update.chat.id or user.id not in giveaway.get('participants', []):
+            continue
+        await db.remove_giveaway_participant(giveaway['_id'], user.id)
+        giveaway = await db.get_giveaway(giveaway['_id'])
+        await _update_giveaway_post(client, giveaway)
+        try:
+            await client.send_message(user.id, _t(giveaway, 'removed_left').format(title=giveaway.get('chat_title', '')))
+        except Exception:
+            pass
 
 
 async def draw_giveaway(client, giveaway):

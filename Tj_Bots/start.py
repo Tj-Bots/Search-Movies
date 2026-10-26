@@ -60,9 +60,11 @@ async def start_command(client, message):
                 return await send_buy_menu(message, user_id)
 
             if file_db_id.startswith("ga_"):
-                from .giveaway import register_giveaway_participant
-                ok, text = await register_giveaway_participant(client, file_db_id[len("ga_"):], user_id)
-                return await message.reply_text(text, quote=True)
+                from .giveaway import register_giveaway_participant, giveaway_result_text, giveaway_result_markup
+                status, giveaway = await register_giveaway_participant(client, file_db_id[len("ga_"):], user_id)
+                return await message.reply_text(
+                    giveaway_result_text(status, giveaway), reply_markup=giveaway_result_markup(status, giveaway), quote=True
+                )
 
             should_check = await db.get_config('auth_force', AUTH_CHANNEL_FORCE)
             missing = await get_missing_mandatory(client, user_id) if should_check else []

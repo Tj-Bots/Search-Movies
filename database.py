@@ -472,4 +472,7 @@ class Database:
     async def finish_giveaway(self, giveaway_id, winners):
         await self.giveaways.update_one({'_id': giveaway_id}, {'$set': {'ended': True, 'winners': winners}})
 
+    async def remove_giveaway_participant(self, giveaway_id, user_id):
+        await self.giveaways.update_one({'_id': giveaway_id}, {'$pull': {'participants': user_id}})
+
 db = Database()
