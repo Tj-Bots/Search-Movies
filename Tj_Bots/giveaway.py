@@ -111,10 +111,16 @@ def giveaway_result_text(status, giveaway):
     return _t(giveaway, key)
 
 
+def _join_link_markup(giveaway):
+    if not giveaway.get('invite_url'):
+        return None
+    label = '📣 Join' if giveaway.get('lang') == 'en' else '📣 הצטרף'
+    return InlineKeyboardMarkup([[InlineKeyboardButton(label, url=giveaway['invite_url'])]])
+
+
 def giveaway_result_markup(status, giveaway):
-    if status == 'not_member' and giveaway.get('invite_url'):
-        label = '📣 Join' if giveaway.get('lang') == 'en' else '📣 הצטרף'
-        return InlineKeyboardMarkup([[InlineKeyboardButton(label, url=giveaway['invite_url'])]])
+    if status == 'not_member':
+        return _join_link_markup(giveaway)
     return None
 
 
@@ -190,7 +196,10 @@ async def handle_giveaway_member_left(client, update):
         giveaway = await db.get_giveaway(giveaway['_id'])
         await _update_giveaway_post(client, giveaway)
         try:
-            await client.send_message(user.id, _t(giveaway, 'removed_left').format(title=giveaway.get('chat_title', '')))
+            await client.send_message(
+                user.id, _t(giveaway, 'removed_left').format(title=giveaway.get('chat_title', '')),
+                reply_markup=_join_link_markup(giveaway)
+            )
         except Exception:
             pass
 
