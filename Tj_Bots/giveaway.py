@@ -7,6 +7,7 @@ from pyrogram import Client, filters, enums
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from database import db
 from config import ADMINS
+from .utils import is_chat_member
 
 ISRAEL_TZ = ZoneInfo("Asia/Jerusalem")
 
@@ -134,9 +135,7 @@ async def register_giveaway_participant(client, giveaway_id, user_id):
     if user_id in giveaway.get('participants', []):
         return 'already', giveaway
 
-    try:
-        await client.get_chat_member(giveaway['chat_id'], user_id)
-    except Exception:
+    if not await is_chat_member(client, giveaway['chat_id'], user_id):
         return 'not_member', giveaway
 
     joined = await db.join_giveaway(giveaway_id, user_id)
@@ -159,9 +158,7 @@ async def handle_giveaway_join(client, query: CallbackQuery):
     if user_id in giveaway.get('participants', []):
         return await query.answer(_t(giveaway, 'already_joined'), show_alert=True)
 
-    try:
-        await client.get_chat_member(giveaway['chat_id'], user_id)
-    except Exception:
+    if not await is_chat_member(client, giveaway['chat_id'], user_id):
         invite_url = giveaway.get('invite_url')
         if invite_url:
             return await query.answer(url=invite_url)

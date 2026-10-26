@@ -1,4 +1,5 @@
 import re
+from pyrogram import enums
 from config import ADMINS
 
 def get_readable_size(size):
@@ -18,14 +19,23 @@ def mandatory_channel_url(entry):
     return f"https://t.me/{entry.get('id')}"
 
 
+async def is_chat_member(client, chat_id, user_id):
+    """get_chat_member doesn't always raise for someone who isn't a member (e.g.
+    channels can return a LEFT/BANNED member object instead of erroring), so the
+    status has to be checked explicitly rather than relying on the call succeeding."""
+    try:
+        member = await client.get_chat_member(chat_id, user_id)
+    except Exception:
+        return False
+    return member.status not in (enums.ChatMemberStatus.LEFT, enums.ChatMemberStatus.BANNED)
+
+
 async def get_missing_mandatory(client, user_id):
     from database import db
     channels = await db.get_mandatory_channels()
     missing = []
     for entry in channels:
-        try:
-            await client.get_chat_member(entry['id'], user_id)
-        except Exception:
+        if not await is_chat_member(client, entry['id'], user_id):
             missing.append(entry)
     return missing
 
