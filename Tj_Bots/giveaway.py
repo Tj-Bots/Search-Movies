@@ -90,6 +90,33 @@ async def post_giveaway(client, giveaway_id, giveaway):
     return msg
 
 
+async def _update_giveaway_post(client, giveaway):
+    if not giveaway.get('message_id'):
+        return
+    try:
+        await client.edit_message_text(
+            giveaway['chat_id'], giveaway['message_id'], _giveaway_text(giveaway),
+            reply_markup=_giveaway_markup(giveaway['_id'], giveaway.get('lang', 'he'))
+        )
+    except Exception:
+        pass
+
+
+async def register_giveaway_participant(client, giveaway_id, user_id):
+    """Registers user_id as a giveaway participant. Returns (ok, text) - the DM/alert text to show."""
+    giveaway = await db.get_giveaway(giveaway_id)
+    if not giveaway or giveaway.get('ended'):
+        return False, _t(giveaway or {}, 'not_found')
+
+    joined = await db.join_giveaway(giveaway_id, user_id)
+    if not joined:
+        return False, _t(giveaway, 'already_joined')
+
+    giveaway = await db.get_giveaway(giveaway_id)
+    await _update_giveaway_post(client, giveaway)
+    return True, _t(giveaway, 'joined_ok')
+
+
 @Client.on_callback_query(filters.regex(r"^ga_join_"))
 async def handle_giveaway_join(client, query: CallbackQuery):
     giveaway_id = query.data[len("ga_join_"):]
@@ -97,16 +124,18 @@ async def handle_giveaway_join(client, query: CallbackQuery):
     if not giveaway or giveaway.get('ended'):
         return await query.answer(_t(giveaway or {}, 'not_found'), show_alert=True)
 
-    joined = await db.join_giveaway(giveaway_id, query.from_user.id)
-    if not joined:
+    user_id = query.from_user.id
+    if user_id in giveaway.get('participants', []):
         return await query.answer(_t(giveaway, 'already_joined'), show_alert=True)
 
-    await query.answer(_t(giveaway, 'joined_ok'), show_alert=True)
-    giveaway = await db.get_giveaway(giveaway_id)
     try:
-        await query.message.edit_text(_giveaway_text(giveaway), reply_markup=_giveaway_markup(giveaway_id, giveaway.get('lang', 'he')))
+        await client.send_message(user_id, _t(giveaway, 'joined_ok'))
     except Exception:
-        pass
+        bot_username = client.me.username
+        return await query.answer(url=f"https://t.me/{bot_username}?start=ga_{giveaway_id}")
+
+    ok, text = await register_giveaway_participant(client, giveaway_id, user_id)
+    await query.answer(text, show_alert=True)
 
 
 async def draw_giveaway(client, giveaway):
