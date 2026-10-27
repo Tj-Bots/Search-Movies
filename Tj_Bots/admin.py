@@ -2025,7 +2025,12 @@ async def admin_callback(client, query):
             text, markup = await _ga_view_text_markup(giveaway_id)
             await query.message.edit_caption(text, reply_markup=markup)
 
-        return await _ask_confirm(query, "להכריז על מנצחים עכשיו ולסיים את ההגרלה מוקדם?", _do_draw, _cancel_draw)
+        return await _ask_confirm(
+            query,
+            "⛔️ <b>פעולה בלתי הפיכה!</b>\n\nלהכריז על מנצחים עכשיו ולסיים את ההגרלה מוקדם? "
+            "הפרימיום יישלח בפועל למנצח/ים מיד ולא ניתן לבטל או להחזיר את זה אחרי.",
+            _do_draw, _cancel_draw
+        )
 
     if data.startswith("adm_ga_cancel_"):
         giveaway_id = data[len("adm_ga_cancel_"):]

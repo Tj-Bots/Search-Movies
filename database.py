@@ -454,6 +454,9 @@ class Database:
     async def set_giveaway_message(self, giveaway_id, message_id):
         await self.giveaways.update_one({'_id': giveaway_id}, {'$set': {'message_id': message_id}})
 
+    async def set_giveaway_results_message(self, giveaway_id, message_id):
+        await self.giveaways.update_one({'_id': giveaway_id}, {'$set': {'results_message_id': message_id}})
+
     async def join_giveaway(self, giveaway_id, user_id):
         result = await self.giveaways.update_one(
             {'_id': giveaway_id, 'ended': False, 'participants': {'$ne': user_id}},

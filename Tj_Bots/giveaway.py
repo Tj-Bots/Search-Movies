@@ -256,12 +256,29 @@ def _winners_announce_text(giveaway):
 
 
 async def _publish_ended_announcement(client, giveaway):
+    """Posts/updates the results as a message of its own, never touching the
+    original giveaway post's text - only its join button gets removed (once),
+    since that post should stay exactly as it was for anyone revisiting it."""
     text = _winners_announce_text(giveaway)
-    if giveaway.get('message_id'):
+
+    if giveaway.get('results_message_id'):
         try:
-            return await client.edit_message_text(giveaway['chat_id'], giveaway['message_id'], text)
+            return await client.edit_message_text(giveaway['chat_id'], giveaway['results_message_id'], text)
         except Exception:
             pass
+
+    if giveaway.get('message_id'):
+        try:
+            await client.edit_message_reply_markup(giveaway['chat_id'], giveaway['message_id'], reply_markup=None)
+        except Exception:
+            pass
+        try:
+            msg = await client.send_message(giveaway['chat_id'], text, reply_to_message_id=giveaway['message_id'])
+            await db.set_giveaway_results_message(giveaway['_id'], msg.id)
+            return
+        except Exception:
+            pass
+
     try:
         await client.send_message(giveaway['chat_id'], text)
     except Exception:
